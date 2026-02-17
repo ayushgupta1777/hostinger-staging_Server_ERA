@@ -47,8 +47,7 @@ build/
 *.sqlite3
 
 # Config files with sensitive data
-config/cloudinary.js
-config/database.js
+
 
 # Node/npm
 .npm
