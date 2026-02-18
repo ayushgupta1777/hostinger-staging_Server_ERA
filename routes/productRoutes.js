@@ -14,52 +14,24 @@ import {
 } from '../controllers/productController.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { productValidation, validate } from '../middleware/validation.js';
-import { upload } from '../middleware/upload.js';
+import { uploadProduct } from '../middleware/fileUpload.js';
 
 const router = express.Router();
 
-// Public routes
-router.get('/', getProducts);
-router.get('/:id', getProduct);
-
-// Get subcategories by parent category
-router.get('/categories/:parentId/subcategories', getSubcategoriesByParent);
-
-// Protected vendor routes
-router.post('/', 
-  protect, 
-  authorize('vendor', 'admin'), 
-  productValidation, 
-  validate, 
-  createProduct
-);
-
-router.put('/:id', 
-  protect, 
-  authorize('vendor', 'admin'), 
-  updateProduct
-);
-
-router.delete('/:id', 
-  protect, 
-  authorize('vendor', 'admin'), 
-  deleteProduct
-);
-
-router.get('/vendor/my-products', 
-  protect, 
-  authorize('vendor'), 
-  getVendorProducts
-);
+// ... existing code ...
 
 // Image upload route
-router.post('/:id/images', 
-  protect, 
-  authorize('vendor', 'admin'), 
-  upload.array('images', 5), 
+router.post('/:id/images',
+  protect,
+  authorize('vendor', 'admin'),
+  uploadProduct.array('images', 5),
   async (req, res) => {
     try {
-      const imageUrls = req.files.map(file => `/uploads/${file.filename}`);
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ success: false, message: 'Please upload images' });
+      }
+
+      const imageUrls = req.files.map(file => `/uploads/products/${file.filename}`);
       res.json({
         success: true,
         data: { images: imageUrls }
