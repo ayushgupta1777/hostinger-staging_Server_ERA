@@ -65,6 +65,15 @@ app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
 // Serve uploaded files
+// Explicitly allow cross-origin access for static files
+app.use((req, res, next) => {
+  if (req.path.startsWith('/uploads') || req.path.startsWith('/temp') || req.path.startsWith('/products') || req.path.startsWith('/users')) {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  }
+  next();
+});
+
 app.use('/uploads', express.static('uploads'));
 app.use('/uploads/temp', express.static('uploads/temp'));
 app.use('/uploads/products', express.static('uploads/products'));
