@@ -7,6 +7,7 @@ import {
   updateSettings,
   testConnection,
   getPickupLocations,
+  setDefaultPickupLocation,
   createShipment,
   generateLabel,
   generateManifest,
@@ -24,6 +25,7 @@ router.get('/settings', getSettings);
 router.put('/settings', updateSettings);
 router.post('/test-connection', testConnection);
 router.get('/pickup-locations', getPickupLocations);
+router.patch('/pickup-locations/:locationId/default', setDefaultPickupLocation);
 
 // Shipment operations
 router.post('/shipment/:orderId', createShipment);

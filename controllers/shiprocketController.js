@@ -131,7 +131,9 @@ export const getPickupLocations = async (req, res, next) => {
     // Save locations to settings
     const settings = await ShiprocketSettings.findOne({ isActive: true });
     if (settings) {
-      settings.pickupLocations = locations.map(loc => ({
+      const existingDefaultId = settings.pickupLocations.find(l => l.isDefault)?.id;
+
+      settings.pickupLocations = locations.map((loc, index) => ({
         id: loc.id,
         name: loc.pickup_location,
         phone: loc.phone,
@@ -140,7 +142,8 @@ export const getPickupLocations = async (req, res, next) => {
         city: loc.city,
         state: loc.state,
         pincode: loc.pin_code,
-        isDefault: false
+        // Preserve existing default or set first one as default if none exists
+        isDefault: existingDefaultId ? (loc.id === existingDefaultId) : (index === 0)
       }));
       await settings.save();
     }
@@ -354,6 +357,37 @@ export const schedulePickup = async (req, res, next) => {
       success: true,
       message: 'Pickup scheduled successfully',
       data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Set default pickup location
+ * @route   PATCH /api/shiprocket/pickup-locations/:locationId/default
+ * @access  Private (Admin)
+ */
+export const setDefaultPickupLocation = async (req, res, next) => {
+  try {
+    const { locationId } = req.params;
+    const settings = await ShiprocketSettings.findOne({ isActive: true });
+
+    if (!settings) {
+      return next(new AppError('Shiprocket settings not found', 404));
+    }
+
+    settings.pickupLocations = settings.pickupLocations.map(loc => ({
+      ...loc.toObject(),
+      isDefault: loc.id === locationId
+    }));
+
+    await settings.save();
+
+    res.json({
+      success: true,
+      message: 'Default pickup location updated',
+      data: { settings }
     });
   } catch (error) {
     next(error);
