@@ -46,9 +46,11 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(helmet()); // Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+})); // Security headers
 // CORS Configuration
-const allowedOrigins = process.env.NODE_ENV === 'production' 
+const allowedOrigins = process.env.NODE_ENV === 'production'
   ? ['*'] // Allow all in production (for mobile apps)
   : [process.env.CLIENT_URL, process.env.ADMIN_URL]; // Specific in development
 
@@ -64,6 +66,14 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
 // Serve uploaded files
 app.use('/uploads', express.static('uploads'));
+app.use('/uploads/temp', express.static('uploads/temp'));
+app.use('/uploads/products', express.static('uploads/products'));
+app.use('/uploads/users', express.static('uploads/users'));
+
+// Support direct access (as seen in PM2 logs)
+app.use('/temp', express.static('uploads/temp'));
+app.use('/products', express.static('uploads/products'));
+app.use('/users', express.static('uploads/users'));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -127,7 +137,7 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  
+
   res.status(err.statusCode || 500).json({
     success: false,
     message: err.message || 'Internal Server Error',
