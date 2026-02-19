@@ -17,13 +17,17 @@ export const getSettings = async (req, res, next) => {
     let settings = await ShiprocketSettings.findOne({ isActive: true });
 
     if (!settings) {
-      settings = await ShiprocketSettings.create({
-        email: '',
-        password: '',
-        isActive: false,
-        pickupLocations: [],
-        autoCreateShipment: true,
-        autoFetchTracking: true
+      return res.json({
+        success: true,
+        data: {
+          settings: {
+            email: '',
+            isActive: false,
+            pickupLocations: [],
+            autoCreateShipment: true,
+            autoFetchTracking: true
+          }
+        }
       });
     }
 
