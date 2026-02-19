@@ -180,6 +180,31 @@ export const createShipment = async (req, res, next) => {
       return next(new AppError('Shipment already created for this order', 400));
     }
 
+    // Auto-sync pickup locations if empty
+    const settings = await ShiprocketSettings.findOne({ isActive: true });
+    if (settings && (!settings.pickupLocations || settings.pickupLocations.length === 0)) {
+      try {
+        const locations = await shiprocketService.getPickupLocations();
+        if (locations && locations.length > 0) {
+          settings.pickupLocations = locations.map((loc, index) => ({
+            id: loc.id,
+            name: loc.pickup_location,
+            phone: loc.phone,
+            email: loc.email,
+            address: loc.address,
+            city: loc.city,
+            state: loc.state,
+            pincode: loc.pin_code,
+            isDefault: index === 0
+          }));
+          await settings.save();
+        }
+      } catch (syncError) {
+        console.error('Failed to auto-sync pickup locations:', syncError.message);
+        // Continue anyway, createOrder will throw the appropriate error if still missing
+      }
+    }
+
     // Create shipment
     const result = await shiprocketService.createOrder(order);
 
