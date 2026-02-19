@@ -67,7 +67,8 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 // Serve uploaded files
 // Explicitly allow cross-origin access for static files
 app.use((req, res, next) => {
-  if (req.path.startsWith('/uploads') || req.path.startsWith('/temp') || req.path.startsWith('/products') || req.path.startsWith('/users')) {
+  const paths = ['/uploads', '/temp', '/products', '/users', '/banners', '/logos', '/categories'];
+  if (paths.some(p => req.path.startsWith(p))) {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   }
@@ -78,11 +79,17 @@ app.use('/uploads', express.static('/root/uploads'));
 app.use('/uploads/temp', express.static('/root/uploads/temp'));
 app.use('/uploads/products', express.static('/root/uploads/products'));
 app.use('/uploads/users', express.static('/root/uploads/users'));
+app.use('/uploads/banners', express.static('/root/uploads/banners'));
+app.use('/uploads/logos', express.static('/root/uploads/logos'));
+app.use('/uploads/categories', express.static('/root/uploads/categories'));
 
 // Support direct access (as seen in PM2 logs)
 app.use('/temp', express.static('/root/uploads/temp'));
 app.use('/products', express.static('/root/uploads/products'));
 app.use('/users', express.static('/root/uploads/users'));
+app.use('/banners', express.static('/root/uploads/banners'));
+app.use('/logos', express.static('/root/uploads/logos'));
+app.use('/categories', express.static('/root/uploads/categories'));
 
 // Health check
 app.get('/health', (req, res) => {

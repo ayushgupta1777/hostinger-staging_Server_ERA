@@ -60,5 +60,23 @@ export const uploadTemp = multer({
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 
+export const uploadBanner = multer({
+  storage: createStorage('banners'),
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+export const uploadLogo = multer({
+  storage: createStorage('logos'),
+  fileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 }
+});
+
+export const uploadCategory = multer({
+  storage: createStorage('categories'),
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
 // Generic upload middleware for backward compatibility if needed
 export const upload = uploadTemp;
