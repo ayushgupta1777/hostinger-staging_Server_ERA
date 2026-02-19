@@ -73,9 +73,9 @@ export const updateSettings = async (req, res, next) => {
         isActive: true
       });
     } else {
-      if (email) settings.email = email;
-      if (password) settings.password = password;
-      if (channelId) settings.channelId = channelId;
+      if (email) settings.email = email.trim();
+      if (password) settings.password = password.trim();
+      if (channelId) settings.channelId = channelId.trim();
       if (autoCreateShipment !== undefined) settings.autoCreateShipment = autoCreateShipment;
       if (autoFetchTracking !== undefined) settings.autoFetchTracking = autoFetchTracking;
       if (trackingUpdateInterval) settings.trackingUpdateInterval = trackingUpdateInterval;
