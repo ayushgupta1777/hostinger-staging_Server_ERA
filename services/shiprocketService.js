@@ -41,6 +41,7 @@ class ShiprocketService {
 
     // Login to get new token
     try {
+      console.log(`Attempting Shiprocket login with email: ${settings.email}`);
       const response = await axios.post(`${SHIPROCKET_BASE_URL}/auth/login`, {
         email: settings.email,
         password: settings.password
@@ -59,6 +60,22 @@ class ShiprocketService {
     } catch (error) {
       console.error('Shiprocket login error:', error.response?.data || error.message);
       throw new AppError('Failed to authenticate with Shiprocket', 500);
+    }
+  }
+
+  /**
+   * Helper to test specific credentials (used for validation on save)
+   */
+  async getTokenWithCredentials(email, password) {
+    try {
+      const response = await axios.post(`${SHIPROCKET_BASE_URL}/auth/login`, {
+        email,
+        password
+      });
+      return response.data.token;
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || error.message;
+      throw new Error(errorMsg);
     }
   }
 

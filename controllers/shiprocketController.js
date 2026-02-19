@@ -67,25 +67,43 @@ export const updateSettings = async (req, res, next) => {
     let settings = await ShiprocketSettings.findOne({ isActive: true });
 
     if (!settings) {
-      settings = await ShiprocketSettings.create({
-        email,
-        password,
+      settings = new ShiprocketSettings({
+        email: (email || '').trim(),
+        password: (password || '').trim(),
         isActive: true
       });
     } else {
       if (email) settings.email = email.trim();
       if (password) settings.password = password.trim();
-      if (channelId) settings.channelId = channelId.trim();
-      if (autoCreateShipment !== undefined) settings.autoCreateShipment = autoCreateShipment;
-      if (autoFetchTracking !== undefined) settings.autoFetchTracking = autoFetchTracking;
-      if (trackingUpdateInterval) settings.trackingUpdateInterval = trackingUpdateInterval;
-      if (defaultWeight) settings.defaultWeight = defaultWeight;
-      if (defaultLength) settings.defaultLength = defaultLength;
-      if (defaultBreadth) settings.defaultBreadth = defaultBreadth;
-      if (defaultHeight) settings.defaultHeight = defaultHeight;
-
-      await settings.save();
     }
+
+    // --- NEW: Validate credentials before final save ---
+    if (email || password) {
+      try {
+        // We temporarily use these credentials to test the login
+        const testToken = await shiprocketService.getTokenWithCredentials(
+          settings.email,
+          settings.password
+        );
+        if (!testToken) {
+          return next(new AppError('Shiprocket login failed. Please check your email and password.', 401));
+        }
+      } catch (authError) {
+        return next(new AppError(`Shiprocket Authentication Failed: ${authError.message}`, 401));
+      }
+    }
+    // --------------------------------------------------
+
+    if (channelId) settings.channelId = channelId.trim();
+    if (autoCreateShipment !== undefined) settings.autoCreateShipment = autoCreateShipment;
+    if (autoFetchTracking !== undefined) settings.autoFetchTracking = autoFetchTracking;
+    if (trackingUpdateInterval) settings.trackingUpdateInterval = trackingUpdateInterval;
+    if (defaultWeight) settings.defaultWeight = defaultWeight;
+    if (defaultLength) settings.defaultLength = defaultLength;
+    if (defaultBreadth) settings.defaultBreadth = defaultBreadth;
+    if (defaultHeight) settings.defaultHeight = defaultHeight;
+
+    await settings.save();
 
     // Don't send password back
     const settingsObj = settings.toObject();
