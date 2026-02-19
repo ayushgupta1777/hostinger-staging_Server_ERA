@@ -67,7 +67,7 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 // Serve uploaded files
 // Explicitly allow cross-origin access for static files
 app.use((req, res, next) => {
-  if (req.path.startsWith('/uploads') || req.path.startsWith('/temp') || req.path.startsWith('/products') || req.path.startsWith('/users')) {
+  if (req.path.startsWith('/uploads') || req.path.startsWith('/temp') || req.path.startsWith('/products') || req.path.startsWith('/users') || req.path.startsWith('/banners') || req.path.startsWith('/categories') || req.path.startsWith('/logos')) {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   }
@@ -78,11 +78,17 @@ app.use('/uploads', express.static('uploads'));
 app.use('/uploads/temp', express.static('uploads/temp'));
 app.use('/uploads/products', express.static('uploads/products'));
 app.use('/uploads/users', express.static('uploads/users'));
+app.use('/uploads/banners', express.static('uploads/banners'));
+app.use('/uploads/categories', express.static('uploads/categories'));
+app.use('/uploads/logos', express.static('uploads/logos'));
 
 // Support direct access (as seen in PM2 logs)
 app.use('/temp', express.static('uploads/temp'));
 app.use('/products', express.static('uploads/products'));
 app.use('/users', express.static('uploads/users'));
+app.use('/banners', express.static('uploads/banners'));
+app.use('/categories', express.static('uploads/categories'));
+app.use('/logos', express.static('uploads/logos'));
 
 // Health check
 app.get('/health', (req, res) => {

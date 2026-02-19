@@ -18,11 +18,38 @@ import { uploadProduct } from '../middleware/fileUpload.js';
 
 const router = express.Router();
 
-// ... existing code ...
+// Public routes
+router.get('/', getProducts);
+router.get('/:id', getProduct);
+router.get('/categories/:parentId/subcategories', getSubcategoriesByParent);
+
+// Protected routes (Vendor/Admin)
+router.use(protect);
+
+router.get('/vendor/my-products', authorize('vendor'), getVendorProducts);
+
+router.post('/',
+  authorize('vendor', 'admin'),
+  uploadProduct.array('images', 5),
+  productValidation,
+  validate,
+  createProduct
+);
+
+router.put('/:id',
+  authorize('vendor', 'admin'),
+  productValidation,
+  validate,
+  updateProduct
+);
+
+router.delete('/:id',
+  authorize('vendor', 'admin'),
+  deleteProduct
+);
 
 // Image upload route
 router.post('/:id/images',
-  protect,
   authorize('vendor', 'admin'),
   uploadProduct.array('images', 5),
   async (req, res) => {
