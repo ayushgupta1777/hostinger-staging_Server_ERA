@@ -8,8 +8,8 @@ import crypto from 'crypto';
  * @param {string} folder - Destination folder under 'uploads/'
  */
 const createStorage = (folder) => {
-  const uploadPath = path.join('uploads', folder);
-  
+  const uploadPath = path.join('/root/uploads', folder);
+
   // Automatically create folders if they do not exist
   if (!fs.existsSync(uploadPath)) {
     fs.mkdirSync(uploadPath, { recursive: true });
@@ -56,6 +56,24 @@ export const uploadUser = multer({
 
 export const uploadTemp = multer({
   storage: createStorage('temp'),
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+export const uploadBanner = multer({
+  storage: createStorage('banners'),
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+export const uploadLogo = multer({
+  storage: createStorage('logos'),
+  fileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 }
+});
+
+export const uploadCategory = multer({
+  storage: createStorage('categories'),
   fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }
 });
