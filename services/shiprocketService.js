@@ -102,9 +102,9 @@ class ShiprocketService {
       throw new AppError('Shiprocket settings not configured', 500);
     }
 
-    const pickupLocation = settings.pickupLocations.find(loc => loc.isDefault);
+    const pickupLocation = settings.pickupLocations.find(loc => loc.isDefault) || settings.pickupLocations[0];
     if (!pickupLocation) {
-      throw new AppError('No default pickup location configured', 500);
+      throw new AppError('No pickup locations found. Please fetch and configure pickup locations in Admin Settings.', 500);
     }
 
     // Prepare order items
@@ -152,7 +152,7 @@ class ShiprocketService {
     };
 
     const response = await this.request('POST', '/orders/create/adhoc', shiprocketOrderData);
-    
+
     return {
       orderId: response.order_id,
       shipmentId: response.shipment_id,
@@ -173,7 +173,7 @@ class ShiprocketService {
     }
 
     const response = await this.request('POST', '/courier/assign/awb', data);
-    
+
     return {
       awb: response.response.data.awb_code,
       courierName: response.response.data.courier_name,
@@ -236,7 +236,7 @@ class ShiprocketService {
    */
   async trackShipment(shipmentId) {
     const response = await this.request('GET', `/courier/track/shipment/${shipmentId}`);
-    
+
     return {
       trackingData: response.tracking_data,
       shipmentTrack: response.shipment_track,
@@ -307,7 +307,7 @@ class ShiprocketService {
     };
 
     const response = await this.request('POST', '/orders/create/return', returnOrderData);
-    
+
     return {
       orderId: response.order_id,
       shipmentId: response.shipment_id
