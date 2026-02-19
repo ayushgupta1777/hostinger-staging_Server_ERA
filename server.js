@@ -74,15 +74,15 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/uploads', express.static('uploads'));
-app.use('/uploads/temp', express.static('uploads/temp'));
-app.use('/uploads/products', express.static('uploads/products'));
-app.use('/uploads/users', express.static('uploads/users'));
+app.use('/uploads', express.static('/root/uploads'));
+app.use('/uploads/temp', express.static('/root/uploads/temp'));
+app.use('/uploads/products', express.static('/root/uploads/products'));
+app.use('/uploads/users', express.static('/root/uploads/users'));
 
 // Support direct access (as seen in PM2 logs)
-app.use('/temp', express.static('uploads/temp'));
-app.use('/products', express.static('uploads/products'));
-app.use('/users', express.static('uploads/users'));
+app.use('/temp', express.static('/root/uploads/temp'));
+app.use('/products', express.static('/root/uploads/products'));
+app.use('/users', express.static('/root/uploads/users'));
 
 // Health check
 app.get('/health', (req, res) => {

@@ -8,8 +8,8 @@ import crypto from 'crypto';
  * @param {string} folder - Destination folder under 'uploads/'
  */
 const createStorage = (folder) => {
-  const uploadPath = path.join('uploads', folder);
-  
+  const uploadPath = path.join('/root/uploads', folder);
+
   // Automatically create folders if they do not exist
   if (!fs.existsSync(uploadPath)) {
     fs.mkdirSync(uploadPath, { recursive: true });
