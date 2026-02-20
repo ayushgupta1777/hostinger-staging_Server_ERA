@@ -64,9 +64,13 @@ export const updateSettings = async (req, res, next) => {
       defaultHeight
     } = req.body;
 
+    // Ensure only one active settings document
     let settings = await ShiprocketSettings.findOne({ isActive: true });
 
     if (!settings) {
+      // Check if there are ANY settings documents and deactivate them just in case
+      await ShiprocketSettings.updateMany({}, { isActive: false });
+
       settings = new ShiprocketSettings({
         email: (email || '').trim(),
         password: (password || '').trim(),
@@ -80,21 +84,28 @@ export const updateSettings = async (req, res, next) => {
     // --- NEW: Validate credentials before final save ---
     if (email || password) {
       try {
-        // We temporarily use these credentials to test the login
+        console.log(`[Shiprocket] Validating credentials for: ${settings.email}`);
         const testToken = await shiprocketService.getTokenWithCredentials(
           settings.email,
           settings.password
         );
         if (!testToken) {
-          return next(new AppError('Shiprocket login failed. Please check your email and password.', 401));
+          throw new Error('No token returned');
         }
+        // Force refresh on next actual request since credentials changed
+        shiprocketService.token = null;
       } catch (authError) {
-        return next(new AppError(`Shiprocket Authentication Failed: ${authError.message}`, 401));
+        console.error(`[Shiprocket] Validation failed: ${authError.message}`);
+        return next(new AppError(
+          `Authentication Failed: ${authError.message}. Please check your Shiprocket login email/password. If credentials are correct, ensure 2FA is disabled on your account.`,
+          401
+        ));
       }
     }
     // --------------------------------------------------
 
     if (channelId) settings.channelId = channelId.trim();
+    // ... rest of implementation stays the same ...
     if (autoCreateShipment !== undefined) settings.autoCreateShipment = autoCreateShipment;
     if (autoFetchTracking !== undefined) settings.autoFetchTracking = autoFetchTracking;
     if (trackingUpdateInterval) settings.trackingUpdateInterval = trackingUpdateInterval;
