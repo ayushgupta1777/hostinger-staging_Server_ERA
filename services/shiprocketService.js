@@ -76,13 +76,22 @@ class ShiprocketService {
    */
   async getTokenWithCredentials(email, password) {
     try {
+      console.log(`[Shiprocket] Testing login for email: "${email}" (length: ${email?.length})`);
       const response = await axios.post(`${SHIPROCKET_BASE_URL}/auth/login`, {
-        email,
-        password
+        email: (email || '').trim(),
+        password: (password || '').trim()
       });
       return response.data.token;
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message;
+      const status = error.response?.status;
+
+      console.error('[Shiprocket] getTokenWithCredentials Failure:', {
+        status,
+        message: errorMsg,
+        data: error.response?.data
+      });
+
       throw new Error(errorMsg);
     }
   }

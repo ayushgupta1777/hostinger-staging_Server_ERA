@@ -114,7 +114,7 @@ export const updateSettings = async (req, res, next) => {
 
         return next(new AppError(
           `Shiprocket authentication failed: ${authError.message}. ${advice}`,
-          401
+          400
         ));
       }
     }
