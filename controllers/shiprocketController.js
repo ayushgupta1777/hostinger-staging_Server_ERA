@@ -64,11 +64,12 @@ export const updateSettings = async (req, res, next) => {
       defaultHeight
     } = req.body;
 
-    // Ensure only one active settings document
+    // --- Settings Unification Logic ---
+    // Ensure only one active settings document exists to prevent configuration conflicts
     let settings = await ShiprocketSettings.findOne({ isActive: true });
 
     if (!settings) {
-      // Check if there are ANY settings documents and deactivate them just in case
+      // Deactivate any rogue settings documents that might exist
       await ShiprocketSettings.updateMany({}, { isActive: false });
 
       settings = new ShiprocketSettings({
@@ -77,35 +78,49 @@ export const updateSettings = async (req, res, next) => {
         isActive: true
       });
     } else {
+      // Deactivate any OTHER documents just to be safe (Clean up duplicates)
+      await ShiprocketSettings.updateMany({ _id: { $ne: settings._id } }, { isActive: false });
+
       if (email) settings.email = email.trim();
       if (password) settings.password = password.trim();
     }
 
-    // --- NEW: Validate credentials before final save ---
+    // --- Credential Validation logic ---
     if (email || password) {
       try {
-        console.log(`[Shiprocket] Validating credentials for: ${settings.email}`);
+        console.log(`[Shiprocket] Starting credential validation for: ${settings.email}`);
         const testToken = await shiprocketService.getTokenWithCredentials(
           settings.email,
           settings.password
         );
+
         if (!testToken) {
-          throw new Error('No token returned');
+          throw new Error('Shiprocket API did not return an authentication token.');
         }
-        // Force refresh on next actual request since credentials changed
+
+        // Success! Reset any cached token to ensure next request uses new credentials
         shiprocketService.token = null;
+        shiprocketService.tokenExpiresAt = null;
+        settings.token = testToken;
+        settings.tokenExpiresAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+
       } catch (authError) {
-        console.error(`[Shiprocket] Validation failed: ${authError.message}`);
+        console.error(`[Shiprocket] Validation failed for ${settings.email}:`, authError.message);
+
+        let advice = "Please double-check your email and password.";
+        if (authError.message.toLowerCase().includes('401') || authError.message.toLowerCase().includes('forbidden')) {
+          advice = "Invalid credentials. If you are certain they are correct, please ensure Two-Factor Authentication (2FA) is turned OFF on your Shiprocket account.";
+        }
+
         return next(new AppError(
-          `Authentication Failed: ${authError.message}. Please check your Shiprocket login email/password. If credentials are correct, ensure 2FA is disabled on your account.`,
+          `Shiprocket authentication failed: ${authError.message}. ${advice}`,
           401
         ));
       }
     }
-    // --------------------------------------------------
+    // ------------------------------------
 
     if (channelId) settings.channelId = channelId.trim();
-    // ... rest of implementation stays the same ...
     if (autoCreateShipment !== undefined) settings.autoCreateShipment = autoCreateShipment;
     if (autoFetchTracking !== undefined) settings.autoFetchTracking = autoFetchTracking;
     if (trackingUpdateInterval) settings.trackingUpdateInterval = trackingUpdateInterval;

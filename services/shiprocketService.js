@@ -41,31 +41,33 @@ class ShiprocketService {
 
     // Login to get new token
     try {
-      console.log(`[Shiprocket] Attempting login for: ${settings.email}`);
+      console.log(`[Shiprocket] Attempting login for email: ${settings.email}`);
       const response = await axios.post(`${SHIPROCKET_BASE_URL}/auth/login`, {
         email: settings.email,
         password: settings.password
       });
 
       this.token = response.data.token;
-      // Token expires in 10 days according to Shiprocket docs
+      // Token expires in 10 days according to Shiprocket documentation
       this.tokenExpiresAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
 
-      // Save token to DB for persistence across restarts
+      // Save token to DB to avoid frequent logins
       settings.token = this.token;
       settings.tokenExpiresAt = this.tokenExpiresAt;
       await settings.save();
 
-      console.log(`[Shiprocket] Login successful for: ${settings.email}`);
+      console.log(`[Shiprocket] Token successfully refreshed for ${settings.email}`);
       return this.token;
     } catch (error) {
-      const errorData = error.response?.data;
-      console.error('[Shiprocket] Login failed:', errorData || error.message);
+      const shiprocketError = error.response?.data;
+      console.error('[Shiprocket] Authentication Failure:', {
+        status: error.response?.status,
+        data: shiprocketError,
+        message: error.message
+      });
 
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        throw new AppError(`Shiprocket Authentication Failed: ${errorData?.message || 'Invalid credentials'}`, 401);
-      }
-      throw new AppError('Failed to authenticate with Shiprocket', 500);
+      const errorMsg = shiprocketError?.message || 'Invalid email and password combination';
+      throw new AppError(`Shiprocket Login Failed: ${errorMsg}`, error.response?.status === 401 ? 401 : 500);
     }
   }
 
@@ -99,7 +101,7 @@ class ShiprocketService {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        timeout: 30000 // 30s timeout
+        timeout: 30000 // 30 second timeout
       };
 
       if (data) {
@@ -109,29 +111,29 @@ class ShiprocketService {
       const response = await axios(config);
       return response.data;
     } catch (error) {
-      // If unauthorized (401), clear local token and retry once
+      // If unauthorized (401), clear the token locally and in DB, then retry once
       if (error.response?.status === 401 && retry) {
-        console.warn('[Shiprocket] Token rejected (401). Retrying with fresh login...');
+        console.warn(`[Shiprocket] Received 401 Unauthorized for ${endpoint}. Clearing token and retrying...`);
         this.token = null;
         this.tokenExpiresAt = null;
 
-        // Also clear token in DB to force fresh login for next request
         try {
+          // Explicitly clear token in DB so other requests don't use the same stale token
           await ShiprocketSettings.updateOne({ isActive: true }, { $unset: { token: 1, tokenExpiresAt: 1 } });
         } catch (dbErr) {
-          console.error('[Shiprocket] Failed to clear expired token from DB:', dbErr.message);
+          console.error('[Shiprocket] Database error while clearing token:', dbErr.message);
         }
 
         return this.request(method, endpoint, data, false);
       }
 
-      const errorMsg = error.response?.data?.message || error.message;
       const status = error.response?.status || 500;
+      const shiprocketMessage = error.response?.data?.message || error.message;
 
-      console.error(`[Shiprocket] API error (${status}):`, error.response?.data || error.message);
+      console.error(`[Shiprocket] API Error [${status}] at [${endpoint}]:`, error.response?.data || error.message);
 
       throw new AppError(
-        `Shiprocket API: ${errorMsg}`,
+        `Shiprocket API Error: ${shiprocketMessage}`,
         status
       );
     }
