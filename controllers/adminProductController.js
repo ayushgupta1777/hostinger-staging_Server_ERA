@@ -4,7 +4,7 @@ import { AppError } from '../middleware/errorHandler.js';
 export const getAllProducts = async (req, res, next) => {
   try {
     const { status, search, page = 1, limit = 20 } = req.query;
-    
+
     const query = {};
     if (status && status !== 'all') query.status = status;
     if (search) {
@@ -43,8 +43,8 @@ export const getAllProducts = async (req, res, next) => {
 
 export const createProduct = async (req, res, next) => {
   try {
-    const sku = `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    
+    const sku = req.body.sku || `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
     const product = await Product.create({
       ...req.body,
       sku,
@@ -86,7 +86,7 @@ export const updateProduct = async (req, res, next) => {
 export const deleteProduct = async (req, res, next) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
-    
+
     if (!product) {
       return next(new AppError('Product not found', 404));
     }

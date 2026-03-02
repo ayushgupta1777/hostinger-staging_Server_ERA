@@ -123,8 +123,8 @@ export const requestWithdrawal = async (req, res, next) => {
       return next(new AppError('Insufficient balance', 400));
     }
 
+    // Deduct from available balance, but DO NOT add to totalWithdrawn yet.
     wallet.balance -= amount;
-    wallet.totalWithdrawn = (wallet.totalWithdrawn || 0) + amount;
     await wallet.save();
 
     // Create withdrawal record (optional)
@@ -135,10 +135,10 @@ export const requestWithdrawal = async (req, res, next) => {
       status: 'pending'
     });
 
-    res.json({ 
-      success: true, 
-      message: 'Withdrawal processed', 
-      data: { wallet, withdrawal } 
+    res.json({
+      success: true,
+      message: 'Withdrawal processed',
+      data: { wallet, withdrawal }
     });
   } catch (error) {
     next(error);
@@ -155,7 +155,7 @@ export const getWithdrawals = async (req, res, next) => {
     const { status, page = 1, limit = 10 } = req.query;
 
     const query = { user: req.user.id };
-    
+
     if (status && status !== 'all') {
       query.status = status;
     }
@@ -195,11 +195,12 @@ export const getSales = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
 
-    // ✅ OLD QUERY - finds any order with resellerEarning > 0
-    const query = { 
+    // ✅ FIX: Query strictly for the logged-in reseller
+    const query = {
+      reseller: req.user.id,
       resellerEarning: { $gt: 0 }
     };
-    
+
     if (status && status !== 'all') {
       query.orderStatus = status;
     }
@@ -253,7 +254,7 @@ export const getTransactions = async (req, res, next) => {
     }
 
     const query = { wallet: wallet._id };
-    
+
     if (type && type !== 'all') {
       if (type === 'commission') {
         query.source = 'resell_earning';
@@ -296,14 +297,16 @@ export const getTransactions = async (req, res, next) => {
 export const getResellerStats = async (req, res, next) => {
   try {
     const wallet = await Wallet.findOne({ user: req.user.id });
-    
-    // ✅ OLD QUERY - count orders with resellerEarning > 0
+
+    // ✅ FIX: query strictly for logged in reseller
     const totalSales = await Order.countDocuments({
+      reseller: req.user.id,
       resellerEarning: { $gt: 0 },
       orderStatus: { $nin: ['cancelled', 'returned'] }
     });
 
     const pendingOrders = await Order.countDocuments({
+      reseller: req.user.id,
       resellerEarning: { $gt: 0 },
       orderStatus: { $in: ['pending', 'confirmed', 'processing'] }
     });
@@ -313,6 +316,7 @@ export const getResellerStats = async (req, res, next) => {
     startOfMonth.setHours(0, 0, 0, 0);
 
     const monthSales = await Order.countDocuments({
+      reseller: req.user.id,
       resellerEarning: { $gt: 0 },
       createdAt: { $gte: startOfMonth }
     });

@@ -64,7 +64,7 @@ class OrderStateMachine {
    */
   static async updateOrderStatus(order, newStatus, metadata = {}) {
     const validation = this.canTransition(order.orderStatus, newStatus);
-    
+
     if (!validation.allowed) {
       throw new Error(validation.reason);
     }
@@ -117,7 +117,7 @@ class OrderStateMachine {
         order.returnWindowEndDate = new Date(
           order.deliveredAt.getTime() + order.returnWindow * 24 * 60 * 60 * 1000
         );
-        
+
         // Mark payment as completed for COD
         if (order.paymentMethod === 'cod') {
           order.paymentStatus = 'completed';
@@ -164,13 +164,69 @@ class OrderStateMachine {
     }
   }
 
-//   static async creditResellerEarnings(order) {
-//     // Implementation in Fix #5
-//   }
+  static async creditResellerEarnings(order) {
+    const Wallet = require('../models/Wallet.js').default;
+    const WalletTransaction = require('../models/WalletTransaction.js').default;
+    const User = require('../models/User.js').default;
 
-//   static async reverseResellerEarnings(order) {
-//     // Implementation in Fix #5
-//   }
+    // Use order.reseller if available, otherwise fallback to order.user
+    const userId = order.reseller || order.user;
+    const wallet = await Wallet.findOne({ user: userId });
+
+    if (wallet) {
+      if (wallet.pendingBalance >= order.resellerEarning) {
+        wallet.pendingBalance -= order.resellerEarning;
+      } else {
+        wallet.pendingBalance = 0; // Safeguard
+      }
+      wallet.balance += order.resellerEarning;
+      wallet.totalEarned += order.resellerEarning;
+      await wallet.save();
+
+      await WalletTransaction.create({
+        wallet: wallet._id,
+        user: userId,
+        type: 'credit',
+        source: 'resell_earning',
+        amount: order.resellerEarning,
+        balanceAfter: wallet.balance,
+        description: `Earning from Order ${order.orderNo}`,
+        referenceId: order._id,
+        referenceModel: 'Order',
+        status: 'completed'
+      });
+
+      order.resellerEarningStatus = 'credited';
+
+      const notificationService = require('../services/notificationService.js').default;
+      const userObj = await User.findById(userId);
+      if (userObj) {
+        await notificationService.sendNotification({
+          user: userId,
+          type: 'wallet_credited',
+          title: 'Earnings Credited! 💰',
+          message: `Your earnings of ₹${order.resellerEarning} for Order ${order.orderNo} are now available to withdraw!`,
+          data: { amount: order.resellerEarning, balance: wallet.balance }
+        });
+      }
+    }
+  }
+
+  static async reverseResellerEarnings(order) {
+    const Wallet = require('../models/Wallet.js').default;
+    const userId = order.reseller || order.user;
+    const wallet = await Wallet.findOne({ user: userId });
+
+    if (wallet && order.resellerEarningStatus === 'pending') {
+      if (wallet.pendingBalance >= order.resellerEarning) {
+        wallet.pendingBalance -= order.resellerEarning;
+      } else {
+        wallet.pendingBalance = 0;
+      }
+      await wallet.save();
+      order.resellerEarningStatus = 'cancelled';
+    }
+  }
 }
 
 export default OrderStateMachine;

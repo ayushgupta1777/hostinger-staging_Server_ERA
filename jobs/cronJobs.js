@@ -6,81 +6,40 @@ import User from '../models/User.js';
 import shiprocketService from '../services/shiprocketService.js';
 import notificationService from '../services/notificationService.js';
 
+import OrderStateMachine from '../utils/OrderStateMachine.js';
+
 /**
- * Credit reseller earnings after return window ends
+ * Complete orders and credit reseller earnings after return window ends
  * Runs every hour
  */
 export const creditResellerEarningsJob = cron.schedule('0 * * * *', async () => {
-  console.log('🔄 Running credit reseller earnings job...');
-  
+  console.log('🔄 Running complete orders job...');
+
   try {
     const now = new Date();
-    
-    // Find delivered orders where return window has ended and earnings not yet credited
+
+    // Find delivered orders where return window has ended
     const eligibleOrders = await Order.find({
       orderStatus: 'delivered',
-      returnWindowEndDate: { $lt: now },
-      resellerEarningStatus: 'pending',
-      reseller: { $exists: true, $ne: null },
-      totalResellerEarning: { $gt: 0 }
-    }).populate('reseller');
+      returnWindowEndDate: { $lt: now }
+    });
 
-    console.log(`Found ${eligibleOrders.length} orders eligible for reseller credit`);
+    console.log(`Found ${eligibleOrders.length} orders eligible for completion`);
 
     for (const order of eligibleOrders) {
       try {
-        // Get or create wallet
-        let wallet = await Wallet.findOne({ user: order.reseller });
-        
-        if (!wallet) {
-          wallet = await Wallet.create({
-            user: order.reseller,
-            balance: 0,
-            totalEarned: 0
-          });
-        }
-
-        // Credit wallet
-        wallet.balance += order.totalResellerEarning;
-        wallet.totalEarned += order.totalResellerEarning;
-        await wallet.save();
-
-        // Create transaction record
-        await WalletTransaction.create({
-          wallet: wallet._id,
-          user: order.reseller,
-          type: 'credit',
-          source: 'resell_earning',
-          amount: order.totalResellerEarning,
-          balanceAfter: wallet.balance,
-          description: `Resell earning from order ${order.orderNo}`,
-          referenceId: order._id.toString(),
-          referenceModel: 'Order',
-          status: 'completed'
+        await OrderStateMachine.updateOrderStatus(order, 'completed', {
+          reason: 'Return window ended automatically',
+          changedBy: null
         });
-
-        // Update order
-        order.resellerEarningStatus = 'credited';
-        order.resellerEarningCreditedAt = new Date();
-        await order.save();
-
-        // Send notification to reseller
-        await notificationService.sendNotification({
-          user: order.reseller,
-          type: 'wallet_credited',
-          title: 'Earnings Credited',
-          message: `₹${order.totalResellerEarning} has been credited to your wallet from order ${order.orderNo}`,
-          referenceId: wallet._id.toString(),
-          referenceModel: 'Wallet'
-        });
-
-        console.log(`✅ Credited ₹${order.totalResellerEarning} to reseller for order ${order.orderNo}`);
+        await order.save(); // ensure saved
+        console.log(`✅ Completed order ${order.orderNo}`);
       } catch (error) {
-        console.error(`❌ Failed to credit order ${order.orderNo}:`, error.message);
+        console.error(`❌ Failed to complete order ${order.orderNo}:`, error.message);
       }
     }
 
-    console.log('✅ Credit reseller earnings job completed');
+    console.log('✅ Complete orders job completed');
   } catch (error) {
     console.error('❌ Credit reseller earnings job failed:', error);
   }
@@ -92,7 +51,7 @@ export const creditResellerEarningsJob = cron.schedule('0 * * * *', async () => 
  */
 export const updateTrackingJob = cron.schedule('*/30 * * * *', async () => {
   console.log('🔄 Running tracking update job...');
-  
+
   try {
     // Find orders that are shipped but not delivered
     const activeOrders = await Order.find({
@@ -105,7 +64,7 @@ export const updateTrackingJob = cron.schedule('*/30 * * * *', async () => {
     for (const order of activeOrders) {
       try {
         const trackingData = await shiprocketService.trackShipment(order.shiprocket.shipmentId);
-        
+
         // Update tracking events
         if (trackingData.shipmentTrackActivities) {
           order.trackingEvents = trackingData.shipmentTrackActivities.map(event => ({
@@ -121,11 +80,11 @@ export const updateTrackingJob = cron.schedule('*/30 * * * *', async () => {
         if (latestStatus === 'delivered' || latestStatus === 'Delivered') {
           order.orderStatus = 'delivered';
           order.deliveredAt = new Date();
-          
+
           // Calculate return window end date
           const returnWindowDays = order.returnWindow || 7;
           order.returnWindowEndDate = new Date(Date.now() + returnWindowDays * 24 * 60 * 60 * 1000);
-          
+
           // Send notification
           await notificationService.sendNotification({
             user: order.user,
@@ -138,7 +97,7 @@ export const updateTrackingJob = cron.schedule('*/30 * * * *', async () => {
         }
 
         await order.save();
-        
+
         console.log(`✅ Updated tracking for order ${order.orderNo}`);
       } catch (error) {
         console.error(`❌ Failed to update tracking for order ${order.orderNo}:`, error.message);
@@ -157,18 +116,18 @@ export const updateTrackingJob = cron.schedule('*/30 * * * *', async () => {
  */
 export const cleanupCartsJob = cron.schedule('0 2 * * *', async () => {
   console.log('🔄 Running cart cleanup job...');
-  
+
   try {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     // Clear items from carts not updated in 30 days
     const result = await Cart.updateMany(
-      { 
+      {
         updatedAt: { $lt: thirtyDaysAgo },
         'items.0': { $exists: true }
       },
-      { 
+      {
         $set: { items: [] }
       }
     );
@@ -185,7 +144,7 @@ export const cleanupCartsJob = cron.schedule('0 2 * * *', async () => {
  */
 export const resellerApplicationReminderJob = cron.schedule('0 10 * * *', async () => {
   console.log('🔄 Running reseller application reminder job...');
-  
+
   try {
     const twoDaysAgo = new Date();
     twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
@@ -200,7 +159,7 @@ export const resellerApplicationReminderJob = cron.schedule('0 10 * * *', async 
 
     // Send notification to admins
     const admins = await User.find({ role: 'admin' });
-    
+
     for (const admin of admins) {
       await notificationService.sendNotification({
         user: admin._id,
@@ -223,7 +182,7 @@ export const resellerApplicationReminderJob = cron.schedule('0 10 * * *', async 
  */
 export const cancelUnpaidOrdersJob = cron.schedule('0 * * * *', async () => {
   console.log('🔄 Running unpaid orders cancellation job...');
-  
+
   try {
     const oneDayAgo = new Date();
     oneDayAgo.setDate(oneDayAgo.getDate() - 1);
@@ -279,13 +238,13 @@ export const cancelUnpaidOrdersJob = cron.schedule('0 * * * *', async () => {
  */
 export const initializeCronJobs = () => {
   console.log('🚀 Initializing cron jobs...');
-  
+
   creditResellerEarningsJob.start();
   updateTrackingJob.start();
   cleanupCartsJob.start();
   resellerApplicationReminderJob.start();
   cancelUnpaidOrdersJob.start();
-  
+
   console.log('✅ All cron jobs initialized');
 };
 
@@ -294,12 +253,12 @@ export const initializeCronJobs = () => {
  */
 export const stopCronJobs = () => {
   console.log('🛑 Stopping cron jobs...');
-  
+
   creditResellerEarningsJob.stop();
   updateTrackingJob.stop();
   cleanupCartsJob.stop();
   resellerApplicationReminderJob.stop();
   cancelUnpaidOrdersJob.stop();
-  
+
   console.log('✅ All cron jobs stopped');
 };

@@ -65,7 +65,7 @@ export const reviewResellerApplication = async (req, res, next) => {
     const { userId } = req.params;
 
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return next(new AppError('User not found', 404));
     }
@@ -170,7 +170,7 @@ export const getAllResellers = async (req, res, next) => {
     const resellersWithStats = await Promise.all(
       resellers.map(async (reseller) => {
         const wallet = await Wallet.findOne({ user: reseller._id });
-        const totalOrders = await Order.countDocuments({ 
+        const totalOrders = await Order.countDocuments({
           reseller: reseller._id,
           orderStatus: 'delivered'
         });
@@ -223,7 +223,7 @@ export const getResellerDetails = async (req, res, next) => {
     const { userId } = req.params;
 
     const user = await User.findById(userId).select('-password');
-    
+
     if (!user) {
       return next(new AppError('User not found', 404));
     }
@@ -291,7 +291,7 @@ export const freezeWallet = async (req, res, next) => {
     const { reason } = req.body;
 
     const wallet = await Wallet.findOne({ user: userId });
-    
+
     if (!wallet) {
       return next(new AppError('Wallet not found', 404));
     }
@@ -332,7 +332,7 @@ export const unfreezeWallet = async (req, res, next) => {
     const { userId } = req.params;
 
     const wallet = await Wallet.findOne({ user: userId });
-    
+
     if (!wallet) {
       return next(new AppError('Wallet not found', 404));
     }
@@ -382,7 +382,7 @@ export const adjustWalletBalance = async (req, res, next) => {
     }
 
     const wallet = await Wallet.findOne({ user: userId });
-    
+
     if (!wallet) {
       return next(new AppError('Wallet not found', 404));
     }
@@ -505,9 +505,23 @@ export const processWithdrawal = async (req, res, next) => {
 
       // Update wallet
       const wallet = withdrawal.wallet;
-      wallet.pendingBalance -= withdrawal.amount;
       wallet.totalWithdrawn += withdrawal.amount;
       await wallet.save();
+
+      // Create transaction record for wallet completion
+      const WalletTransaction = require('../models/WalletTransaction.js').default;
+      await WalletTransaction.create({
+        wallet: wallet._id,
+        user: withdrawal.user._id,
+        type: 'debit',
+        source: 'withdrawal',
+        amount: withdrawal.amount,
+        balanceAfter: wallet.balance,
+        description: `Withdrawal to Bank (UTR: ${utrNumber})`,
+        referenceId: withdrawal._id,
+        referenceModel: 'Withdrawal',
+        status: 'completed'
+      });
 
       // Send notification
       await notificationService.sendNotification({
@@ -529,9 +543,23 @@ export const processWithdrawal = async (req, res, next) => {
 
       // Return amount to available balance
       const wallet = withdrawal.wallet;
-      wallet.pendingBalance -= withdrawal.amount;
       wallet.balance += withdrawal.amount;
       await wallet.save();
+
+      // Create transaction for rejection
+      const WalletTransaction = require('../models/WalletTransaction.js').default;
+      await WalletTransaction.create({
+        wallet: wallet._id,
+        user: withdrawal.user._id,
+        type: 'credit',
+        source: 'refund',
+        amount: withdrawal.amount,
+        balanceAfter: wallet.balance,
+        description: `Withdrawal Rejected: ${rejectionReason}`,
+        referenceId: withdrawal._id,
+        referenceModel: 'Withdrawal',
+        status: 'completed'
+      });
 
       // Send notification
       await notificationService.sendNotification({

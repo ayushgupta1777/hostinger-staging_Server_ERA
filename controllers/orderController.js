@@ -66,7 +66,7 @@ export const createOrder = async (req, res, next) => {
 
     // ✅ FIX: Correct status based on payment method
     let orderStatus, paymentStatus;
-    
+
     if (paymentMethod === 'cod') {
       // COD orders are immediately confirmed
       orderStatus = 'confirmed';
@@ -76,6 +76,9 @@ export const createOrder = async (req, res, next) => {
       orderStatus = 'pending';
       paymentStatus = 'pending'; // Will be updated after Razorpay verification
     }
+
+    // ✅ FIX: Determine reseller explicitly
+    const resellerId = totalResellerEarning > 0 ? req.user.id : null;
 
     // Create order
     const order = await Order.create({
@@ -97,10 +100,20 @@ export const createOrder = async (req, res, next) => {
       paymentStatus,      // ✅ Dynamic based on payment method
       orderStatus,        // ✅ Dynamic based on payment method
       confirmedAt: paymentMethod === 'cod' ? new Date() : null, // ✅ COD confirmed immediately
+      reseller: resellerId,
       resellerEarning: totalResellerEarning,
       resellerEarningStatus: 'pending',
       returnWindowEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
+
+    // Auto add to reseller wallet as pending for COD (since COD is immediately confirmed)
+    if (paymentMethod === 'cod' && totalResellerEarning > 0) {
+      const wallet = await Wallet.findOne({ user: req.user.id });
+      if (wallet) {
+        wallet.pendingBalance += totalResellerEarning;
+        await wallet.save();
+      }
+    }
 
     console.log('✅ Order created:', order.orderNo, 'Status:', order.orderStatus);
 
@@ -175,7 +188,8 @@ export const updatePaymentStatus = async (req, res, next) => {
 
       // Auto add to reseller wallet as pending
       if (order.resellerEarning > 0) {
-        const wallet = await Wallet.findOne({ user: order.user });
+        // Query using reseller or user since it's the same here
+        const wallet = await Wallet.findOne({ user: order.reseller || order.user });
         if (wallet) {
           wallet.pendingBalance += order.resellerEarning;
           await wallet.save();
@@ -193,7 +207,7 @@ export const updatePaymentStatus = async (req, res, next) => {
 export const cancelOrder = async (req, res, next) => {
   try {
     const { reason } = req.body;
-    
+
     const order = await Order.findById(req.params.orderId);
     if (!order) return next(new AppError('Order not found', 404));
 
@@ -244,10 +258,10 @@ export const cancelOrder = async (req, res, next) => {
       referenceModel: 'Order'
     });
 
-    res.json({ 
-      success: true, 
-      message: 'Order cancelled successfully', 
-      data: { order } 
+    res.json({
+      success: true,
+      message: 'Order cancelled successfully',
+      data: { order }
     });
   } catch (error) {
     next(error);
@@ -279,7 +293,7 @@ export const updateOrderStatus = async (req, res, next) => {
     if (status === 'delivered') {
       order.deliveredAt = new Date();
       order.paymentStatus = 'completed';
-      
+
       // Calculate return window end date
       const returnWindowDays = order.returnWindow || 7;
       order.returnWindowEndDate = new Date(Date.now() + returnWindowDays * 24 * 60 * 60 * 1000);
@@ -315,7 +329,7 @@ export const updateOrderStatus = async (req, res, next) => {
 export const getOrderTracking = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.orderId);
-    
+
     if (!order) {
       return next(new AppError('Order not found', 404));
     }
@@ -330,7 +344,7 @@ export const getOrderTracking = async (req, res, next) => {
     if (order.shiprocket && order.shiprocket.shipmentId) {
       try {
         trackingData = await shiprocketService.trackShipment(order.shiprocket.shipmentId);
-        
+
         // Update tracking events in order
         if (trackingData.shipmentTrackActivities) {
           order.trackingEvents = trackingData.shipmentTrackActivities.map(event => ({
@@ -339,7 +353,7 @@ export const getOrderTracking = async (req, res, next) => {
             location: event.location || '',
             timestamp: new Date(event.date)
           }));
-          
+
           await order.save();
         }
       } catch (error) {

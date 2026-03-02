@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const orderSchema = new mongoose.Schema({
   orderNo: { type: String, required: true, unique: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  
+
   items: [{
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     quantity: { type: Number, required: true, min: 1 },
@@ -11,7 +11,7 @@ const orderSchema = new mongoose.Schema({
     resellPrice: { type: Number, default: 0 },
     finalPrice: { type: Number, required: true }
   }],
-  
+
   shippingAddress: {
     name: { type: String, required: true },
     phone: { type: String, required: true },
@@ -22,35 +22,35 @@ const orderSchema = new mongoose.Schema({
     pincode: { type: String, required: true },
     country: { type: String, default: 'India' }
   },
-  
+
   // Pricing
   subtotal: { type: Number, required: true },
   shipping: { type: Number, default: 0 },
   tax: { type: Number, default: 0 },
   total: { type: Number, required: true },
-  
+
   // Payment
-  paymentMethod: { 
-    type: String, 
-    enum: ['cod', 'upi', 'card'], 
-    required: true 
+  paymentMethod: {
+    type: String,
+    enum: ['cod', 'upi', 'card'],
+    required: true
   },
-  paymentStatus: { 
-    type: String, 
-    enum: ['pending', 'completed', 'failed', 'refunded'], 
-    default: 'pending' 
+  paymentStatus: {
+    type: String,
+    enum: ['pending', 'completed', 'failed', 'refunded'],
+    default: 'pending'
   },
   paymentId: String,
   paymentError: String, // ✅ ADD THIS
-  
+
   // Razorpay fields
   razorpayOrderId: String,
   razorpayPaymentId: String,
   razorpaySignature: String,
-  
+
   // Order Status - ✅ FIXED ENUM
-  orderStatus: { 
-    type: String, 
+  orderStatus: {
+    type: String,
     enum: [
       'pending',        // Initial state for online payment
       'confirmed',      // COD orders or after payment verification
@@ -61,10 +61,10 @@ const orderSchema = new mongoose.Schema({
       'delivered',      // Successfully delivered
       'cancelled',      // Order cancelled
       'returned'        // Order returned
-    ], 
-    default: 'pending' 
+    ],
+    default: 'pending'
   },
-  
+
   // Status History - ✅ ADD THIS
   statusHistory: [{
     from: String,
@@ -73,19 +73,19 @@ const orderSchema = new mongoose.Schema({
     changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reason: String
   }],
-  
+
   // Cancellation
   cancellationReason: String, // ✅ ADD THIS
   cancelledAt: Date,
   cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  
+
   // Timestamps
   confirmedAt: Date,
   processingAt: Date,
   packedAt: Date,
   shippedAt: Date,
   deliveredAt: Date,
-  
+
   // Shiprocket Integration
   shiprocket: {
     orderId: String,
@@ -96,7 +96,7 @@ const orderSchema = new mongoose.Schema({
     labelUrl: String,
     manifestUrl: String
   },
-  
+
   trackingNumber: String,
   courierName: String,
   trackingEvents: [{
@@ -105,23 +105,24 @@ const orderSchema = new mongoose.Schema({
     location: String,
     timestamp: Date
   }],
-  
+
   // Reseller
+  reseller: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   resellerEarning: { type: Number, default: 0 },
-  resellerEarningStatus: { 
-    type: String, 
-    enum: ['pending', 'credited', 'cancelled'], 
-    default: 'pending' 
+  resellerEarningStatus: {
+    type: String,
+    enum: ['pending', 'credited', 'cancelled'],
+    default: 'pending'
   },
-  
+
   // Return Window
   returnWindow: { type: Number, default: 7 }, // days
   returnWindowEndDate: Date
-  
+
 }, { timestamps: true });
 
 // ✅ ADD PRE-SAVE MIDDLEWARE FOR STATUS HISTORY
-orderSchema.pre('save', function(next) {
+orderSchema.pre('save', function (next) {
   if (this.isModified('orderStatus')) {
     this.statusHistory.push({
       from: this._previousOrderStatus || 'none',

@@ -39,10 +39,10 @@ export const getProducts = async (req, res, next) => {
       if (mongoose.Types.ObjectId.isValid(subcategory)) {
         query.subcategory = subcategory;
       } else {
-        const subCategoryDoc = await Category.findOne({ 
-          slug: subcategory.toLowerCase() 
+        const subCategoryDoc = await Category.findOne({
+          slug: subcategory.toLowerCase()
         });
-        
+
         if (subCategoryDoc) {
           query.subcategory = subCategoryDoc._id;
         } else {
@@ -68,21 +68,21 @@ export const getProducts = async (req, res, next) => {
         // Find all subcategories under this parent
         const subCategories = await Category.find({ parent: category });
         const subCategoryIds = subCategories.map(cat => cat._id);
-        
+
         // Include products from parent category AND its subcategories
         query.$or = [
           { category: category },
           { subcategory: { $in: subCategoryIds } }
         ];
       } else {
-        const categoryDoc = await Category.findOne({ 
-          slug: category.toLowerCase() 
+        const categoryDoc = await Category.findOne({
+          slug: category.toLowerCase()
         });
-        
+
         if (categoryDoc) {
           const subCategories = await Category.find({ parent: categoryDoc._id });
           const subCategoryIds = subCategories.map(cat => cat._id);
-          
+
           query.$or = [
             { category: categoryDoc._id },
             { subcategory: { $in: subCategoryIds } }
@@ -215,7 +215,7 @@ export const createProduct = async (req, res, next) => {
     }
 
     // Generate SKU
-    const sku = `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const sku = req.body.sku || `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     const productData = {
       ...req.body,
@@ -240,7 +240,7 @@ export const createProduct = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: req.user.role === 'admin' 
+      message: req.user.role === 'admin'
         ? 'Product created successfully'
         : 'Product created successfully. Pending admin approval.',
       data: { product }
