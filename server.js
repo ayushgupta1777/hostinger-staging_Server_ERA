@@ -173,10 +173,31 @@ app.get('/product/:productId', async (req, res) => {
     // 2. Prepare metadata
     const title = product.title || 'Product';
     const description = product.description || 'View this product on New Raj Fancy Store';
-    // Use the first image if available, else a placeholder
-    const firstImage = product.images && product.images.length > 0
-      ? `https://newrajfancystore.adsngrow.in/products/${product.images[0]}`
-      : 'https://newrajfancystore.adsngrow.in/logo.png';
+
+    // Improved Image URL logic
+    let firstImage = 'https://newrajfancystore.adsngrow.in/logo.png';
+    if (product.images && product.images.length > 0) {
+      let imgPath = product.images[0];
+      if (imgPath.startsWith('http')) {
+        firstImage = imgPath;
+      } else {
+        // Consistently remove ALL leading slashes
+        while (imgPath.startsWith('/')) {
+          imgPath = imgPath.substring(1);
+        }
+        // If it already includes 'uploads/', it's a full relative path
+        if (imgPath.startsWith('uploads/')) {
+          firstImage = `https://newrajfancystore.adsngrow.in/${imgPath}`;
+        } else if (imgPath.startsWith('temp-')) {
+          firstImage = `https://newrajfancystore.adsngrow.in/temp/${imgPath}`;
+        } else {
+          // Default to /products/ if it's just a filename
+          firstImage = `https://newrajfancystore.adsngrow.in/products/${imgPath}`;
+        }
+      }
+    }
+    console.log(`Generated firstImage for product ${productId}: ${firstImage}`);
+
     const price = product.price ? `₹${product.price}` : '';
     const productUrl = `https://newrajfancystore.adsngrow.in/product/${productId}`;
     const appDeepLink = `rajfancy://product/${productId}`;
