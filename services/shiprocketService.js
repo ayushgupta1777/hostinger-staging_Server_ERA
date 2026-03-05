@@ -164,8 +164,8 @@ class ShiprocketService {
 
     // Prepare order items
     const orderItems = order.items.map(item => ({
-      name: item.productTitle,
-      sku: item.product.toString(),
+      name: item.productTitle || (item.product && item.product.title) || 'Product',
+      sku: item.sku || (item.product && item.product.sku) || item.product.toString(),
       units: item.quantity,
       selling_price: item.finalPrice,
       discount: 0,

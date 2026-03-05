@@ -31,6 +31,7 @@ import bannerRoutes from './routes/bannerRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import searchRoutes from './routes/searchRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
+import couponRoutes from './routes/couponRoutes.js';
 
 import wishlistRoutes from './routes/wishlistRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
@@ -129,6 +130,7 @@ app.use('/api/banners', bannerRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/admin/products', adminProductRoutes);
+app.use('/api/coupons', couponRoutes);
 
 
 app.use('/api/wishlist', wishlistRoutes);

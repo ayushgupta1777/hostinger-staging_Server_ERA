@@ -6,6 +6,7 @@ const orderSchema = new mongoose.Schema({
 
   items: [{
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    sku: String, // ✅ ADD THIS FOR PERSISTENCE
     quantity: { type: Number, required: true, min: 1 },
     basePrice: { type: Number, required: true },
     resellPrice: { type: Number, default: 0 },
@@ -113,6 +114,12 @@ const orderSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'credited', 'cancelled'],
     default: 'pending'
+  },
+
+  // Coupon
+  coupon: {
+    code: String,
+    discountAmount: { type: Number, default: 0 }
   },
 
   // Return Window

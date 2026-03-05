@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import Cart from '../models/Cart.js';
 import Product from '../models/Product.js';
 import Wallet from '../models/Wallet.js';
+import Coupon from '../models/Coupon.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 // Generate unique order number
@@ -16,7 +17,7 @@ const generateOrderNumber = async () => {
 
 export const createOrder = async (req, res, next) => {
   try {
-    const { shippingAddress, paymentMethod } = req.body;
+    const { shippingAddress, paymentMethod, couponCode } = req.body;
 
     console.log('📦 CREATE ORDER - Received:', { shippingAddress, paymentMethod });
 
@@ -31,7 +32,7 @@ export const createOrder = async (req, res, next) => {
 
     // Get cart
     const cart = await Cart.findOne({ user: req.user.id })
-      .populate('items.product', 'title stock');
+      .populate('items.product', 'title stock sku');
 
     if (!cart || cart.items.length === 0) {
       return next(new AppError('Cart is empty', 400));
@@ -49,9 +50,63 @@ export const createOrder = async (req, res, next) => {
 
     // Calculate totals
     const subtotal = cart.totalPrice;
-    const shipping = subtotal >= 500 ? 0 : 50;
+    let shipping = subtotal >= 500 ? 0 : 50;
     const tax = Math.round(subtotal * 0.18);
-    const total = subtotal + shipping + tax;
+    let total = subtotal + shipping + tax;
+
+    // Handle Coupon
+    let couponDetails = null;
+    let appliedDiscount = 0;
+
+    if (couponCode) {
+      const coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        isActive: true,
+        expiryDate: { $gt: new Date() }
+      });
+
+      if (!coupon) {
+        return next(new AppError('Invalid or expired coupon', 400));
+      }
+
+      // Check usage limits
+      if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
+        return next(new AppError('Coupon usage limit reached', 400));
+      }
+
+      // Check min order amount
+      if (subtotal < coupon.minOrderAmount) {
+        return next(new AppError(`Minimum order amount for this coupon is ₹${coupon.minOrderAmount}`, 400));
+      }
+
+      // Check per-user limit
+      const userUsage = coupon.usersUsed.find(u => u.user.toString() === req.user.id);
+      if (userUsage && userUsage.count >= coupon.perUserLimit) {
+        return next(new AppError('You have already used this coupon', 400));
+      }
+
+      // Calculate discount
+      if (coupon.discountType === 'percentage') {
+        appliedDiscount = (subtotal * coupon.discountAmount) / 100;
+        if (coupon.maxDiscountAmount && appliedDiscount > coupon.maxDiscountAmount) {
+          appliedDiscount = coupon.maxDiscountAmount;
+        }
+      } else {
+        appliedDiscount = coupon.discountAmount;
+      }
+
+      // Ensure discount doesn't exceed subtotal
+      if (appliedDiscount > subtotal) {
+        appliedDiscount = subtotal;
+      }
+
+      appliedDiscount = Math.round(appliedDiscount);
+      total -= appliedDiscount;
+      couponDetails = {
+        code: coupon.code,
+        discountAmount: appliedDiscount
+      };
+    }
 
     // Generate order number
     const orderNo = await generateOrderNumber();
@@ -86,6 +141,7 @@ export const createOrder = async (req, res, next) => {
       user: req.user.id,
       items: cart.items.map(item => ({
         product: item.product._id,
+        sku: item.product.sku, // ✅ Store SKU at time of order
         quantity: item.quantity,
         basePrice: item.basePrice,
         resellPrice: item.resellPrice,
@@ -103,8 +159,24 @@ export const createOrder = async (req, res, next) => {
       reseller: resellerId,
       resellerEarning: totalResellerEarning,
       resellerEarningStatus: 'pending',
-      returnWindowEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      returnWindowEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      coupon: couponDetails
     });
+
+    // Update Coupon usage tracking
+    if (couponDetails) {
+      const coupon = await Coupon.findOne({ code: couponDetails.code });
+      if (coupon) {
+        coupon.usedCount += 1;
+        const userUsageIndex = coupon.usersUsed.findIndex(u => u.user.toString() === req.user.id);
+        if (userUsageIndex !== -1) {
+          coupon.usersUsed[userUsageIndex].count += 1;
+        } else {
+          coupon.usersUsed.push({ user: req.user.id, count: 1 });
+        }
+        await coupon.save();
+      }
+    }
 
     // Auto add to reseller wallet as pending for COD (since COD is immediately confirmed)
     if (paymentMethod === 'cod' && totalResellerEarning > 0) {
@@ -158,7 +230,7 @@ export const getMyOrders = async (req, res, next) => {
 export const getOrder = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.orderId)
-      .populate('items.product', 'title images');
+      .populate('items.product', 'title images sku');
 
     if (!order) return next(new AppError('Order not found', 404));
 
