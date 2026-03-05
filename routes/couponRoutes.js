@@ -6,7 +6,7 @@ import {
     deleteCoupon,
     validateCoupon
 } from '../controllers/couponController.js';
-import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -15,7 +15,7 @@ router.use(protect);
 router.post('/validate', validateCoupon);
 
 // Admin only routes
-router.use(restrictTo('admin'));
+router.use(authorize('admin'));
 router.route('/')
     .get(getAllCoupons)
     .post(createCoupon);
