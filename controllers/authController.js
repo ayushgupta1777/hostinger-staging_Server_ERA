@@ -39,6 +39,7 @@ export const register = async (req, res, next) => {
       role: role || 'customer'
     });
 
+    /* 
     // If registering as vendor, create vendor profile
     if (role === 'vendor') {
       await Vendor.create({
@@ -64,6 +65,7 @@ export const register = async (req, res, next) => {
         wallet: wallet._id
       });
     }
+    */
 
     // Generate token
     const token = generateToken(user._id);
@@ -297,7 +299,7 @@ export const logout = async (req, res, next) => {
   try {
     // In a more complex setup with refresh tokens, 
     // you would invalidate the refresh token here
-    
+
     res.json({
       success: true,
       message: 'Logged out successfully'

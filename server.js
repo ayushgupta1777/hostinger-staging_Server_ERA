@@ -7,6 +7,8 @@ import connectDB from './config/database.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './config/swagger.js';
 
+import Product from './models/Product.js';
+
 // Import routes
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -149,6 +151,96 @@ app.use('/api/addresses', addressRoutes);
 
 // console.log('🔑 Razorpay Key:', process.env.RAZORPAY_KEY_ID);
 
+
+// Product Landing Page (Dynamic fallback for browser/deep links)
+app.get('/product/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    // 1. Fetch product
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      return res.status(404).send(`
+        <div style="text-align: center; padding: 50px; font-family: sans-serif;">
+          <h1>Product Not Found</h1>
+          <p>We couldn't find the product you're looking for.</p>
+          <a href="/" style="color: #4F46E5; text-decoration: none; font-weight: bold;">Return to Home</a>
+        </div>
+      `);
+    }
+
+    // 2. Prepare metadata
+    const title = product.title || 'Product';
+    const description = product.description || 'View this product on New Raj Fancy Store';
+    // Use the first image if available, else a placeholder
+    const firstImage = product.images && product.images.length > 0
+      ? `https://newrajfancystore.adsngrow.in/products/${product.images[0]}`
+      : 'https://newrajfancystore.adsngrow.in/logo.png';
+    const price = product.price ? `₹${product.price}` : '';
+    const productUrl = `https://newrajfancystore.adsngrow.in/product/${productId}`;
+    const appDeepLink = `rajfancy://product/${productId}`;
+
+    // 3. Render Landing Page
+    res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title} | New Raj Fancy Store</title>
+    
+    <!-- Open Graph (WhatsApp, Telegram, FB) -->
+    <meta property="og:title" content="${title} - ${price}">
+    <meta property="og:description" content="${description}">
+    <meta property="og:image" content="${firstImage}">
+    <meta property="og:url" content="${productUrl}">
+    <meta property="og:type" content="product">
+    
+    <!-- Smart Banner for iOS -->
+    <meta name="apple-itunes-app" content="app-id=com.mobile, app-argument=${appDeepLink}">
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #F9FAFB; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: #111827; }
+        .card { background: white; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 32px; max-width: 400px; text-align: center; width: 90%; }
+        .product-img { width: 100%; border-radius: 12px; margin-bottom: 24px; aspect-ratio: 1; object-fit: cover; }
+        h1 { font-size: 22px; margin: 0 0 12px; }
+        .price { font-size: 24px; font-weight: bold; color: #4F46E5; margin-bottom: 16px; }
+        .desc { color: #6B7280; font-size: 14px; margin-bottom: 32px; line-height: 1.5; }
+        .btn { background: #4F46E5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; display: block; transition: transform 0.2s; }
+        .btn:active { transform: scale(0.98); }
+        .footer-logo { margin-top: 24px; opacity: 0.5; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img src="${firstImage}" class="product-img" alt="${title}">
+        <h1>${title}</h1>
+        <div class="price">${price}</div>
+        <p class="desc">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</p>
+        
+        <a href="${appDeepLink}" class="btn" id="open-btn">Open in App</a>
+        
+        <div class="footer-logo">New Raj Fancy Store</div>
+    </div>
+
+    <script>
+        // Auto-redirect Attempt
+        window.onload = function() {
+            // Attempt to open the app after a tiny delay
+            setTimeout(function() {
+                window.location.href = "${appDeepLink}";
+            }, 500);
+        };
+    </script>
+</body>
+</html>
+    `);
+  } catch (error) {
+    console.error('Landing page error:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
 
 // Root route
 app.get('/', (req, res) => {
