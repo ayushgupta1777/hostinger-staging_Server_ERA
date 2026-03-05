@@ -90,6 +90,15 @@ app.use('/banners', express.static('/root/uploads/banners'));
 app.use('/categories', express.static('/root/uploads/categories'));
 app.use('/logos', express.static('/root/uploads/logos'));
 
+// Deep Linking Verification
+app.use('/.well-known', express.static('.well-known', {
+  setHeaders: (res, path) => {
+    if (path.endsWith('apple-app-site-association') || path.endsWith('assetlinks.json')) {
+      res.set('Content-Type', 'application/json');
+    }
+  }
+}));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
