@@ -29,9 +29,14 @@ export const getProducts = async (req, res, next) => {
     // Build query
     const query = { status: 'approved', isActive: true };
 
-    // Search in title and description
+    // Search in title, description and keywords using text index
     if (search) {
-      query.$text = { $search: search };
+      const trimmedSearch = search.trim();
+      query.$or = [
+        { $text: { $search: trimmedSearch } },
+        { title: { $regex: trimmedSearch, $options: 'i' } },
+        { keywords: { $in: [new RegExp(trimmedSearch, 'i')] } }
+      ];
     }
 
     // Filter by subcategory (priority over category)

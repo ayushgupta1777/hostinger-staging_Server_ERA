@@ -38,6 +38,7 @@ import couponRoutes from './routes/couponRoutes.js';
 import wishlistRoutes from './routes/wishlistRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
+import appSettingRoutes from './routes/appSettingRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -147,6 +148,7 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/addresses', addressRoutes);
+app.use('/api/settings', appSettingRoutes);
 
 
 // console.log('🔑 Razorpay Key:', process.env.RAZORPAY_KEY_ID);

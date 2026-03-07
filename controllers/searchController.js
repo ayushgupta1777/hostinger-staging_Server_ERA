@@ -25,22 +25,25 @@ export const globalSearch = async (req, res, next) => {
       });
     }
 
-    const searchRegex = new RegExp(query, 'i');
+    const trimmedQuery = query.trim();
+    const searchRegex = new RegExp(trimmedQuery, 'i');
 
     // Parallel search for better performance
     const [products, allCategories] = await Promise.all([
-      // Search products by title and description
+      // Search products using text search and regex fallback for partial matches
       Product.find({
         $or: [
+          { $text: { $search: trimmedQuery } },
           { title: searchRegex },
-          { description: searchRegex }
+          { keywords: { $in: [searchRegex] } }
         ],
         status: 'approved',
         isActive: true
       })
         .populate('category', 'name slug image')
         .populate('subcategory', 'name slug image parent')
-        .limit(20),
+        .limit(20)
+        .lean(),
 
       // Search all categories (both parent and subcategories)
       Category.find({
@@ -49,11 +52,12 @@ export const globalSearch = async (req, res, next) => {
       })
         .populate('parent', 'name slug image')
         .limit(20)
+        .lean()
     ]);
 
     // Separate root categories and subcategories
-    const categories = allCategories.filter(cat => !cat.parent || cat.parent === null);
-    const subcategories = allCategories.filter(cat => cat.parent !== null && cat.parent !== undefined);
+    const categories = allCategories.filter(cat => !cat.parent);
+    const subcategories = allCategories.filter(cat => cat.parent);
 
     res.json({
       success: true,
@@ -61,8 +65,57 @@ export const globalSearch = async (req, res, next) => {
         products,
         categories,
         subcategories,
-        query
+        query: trimmedQuery
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get search suggestions for autocomplete
+ * @route   GET /api/search/suggestions
+ * @access  Public
+ */
+export const getSearchSuggestions = async (req, res, next) => {
+  try {
+    const { query } = req.query;
+
+    if (!query || query.trim().length < 2) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const trimmedQuery = query.trim();
+    const searchRegex = new RegExp(`^${trimmedQuery}`, 'i'); // Starts with
+
+    const [productTitles, categoryNames] = await Promise.all([
+      Product.find({
+        title: searchRegex,
+        status: 'approved',
+        isActive: true
+      })
+        .select('title')
+        .limit(5)
+        .lean(),
+
+      Category.find({
+        name: searchRegex,
+        isActive: true
+      })
+        .select('name')
+        .limit(5)
+        .lean()
+    ]);
+
+    const suggestions = [
+      ...productTitles.map(p => ({ text: p.title, type: 'product' })),
+      ...categoryNames.map(c => ({ text: c.name, type: 'category' }))
+    ];
+
+    res.json({
+      success: true,
+      data: suggestions
     });
   } catch (error) {
     next(error);

@@ -107,13 +107,15 @@ const productSchema = new mongoose.Schema({
   },
   // SEO
   seoTitle: String,
-  seoDescription: String
+  seoDescription: String,
+  // Search Keywords
+  keywords: [String]
 }, {
   timestamps: true
 });
 
 // Index for search and filtering
-productSchema.index({ title: 'text', description: 'text' });
+productSchema.index({ title: 'text', description: 'text', keywords: 'text' }, { weights: { title: 10, keywords: 5, description: 1 } });
 productSchema.index({ vendor: 1, category: 1, subcategory: 1 });
 productSchema.index({ category: 1, subcategory: 1, status: 1 });
 productSchema.index({ status: 1, isActive: 1 });

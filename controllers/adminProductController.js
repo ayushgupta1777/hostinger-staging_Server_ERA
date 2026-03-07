@@ -10,8 +10,14 @@ export const getAllProducts = async (req, res, next) => {
     if (search) {
       query.$or = [
         { title: new RegExp(search, 'i') },
-        { description: new RegExp(search, 'i') }
+        { description: new RegExp(search, 'i') },
+        { sku: new RegExp(search, 'i') }
       ];
+
+      // If search is a valid MongoDB ID, add it to $or
+      if (search.match(/^[0-9a-fA-F]{24}$/)) {
+        query.$or.push({ _id: search });
+      }
     }
 
     const skip = (page - 1) * limit;
