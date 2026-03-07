@@ -1,0 +1,59 @@
+≡ƒÜÇ Server running on port 5000
+≡ƒôÜ API Docs: http://localhost:5000/api-docs
+≡ƒîì Environment: development
+Γ£à MongoDB Connected: cluster0-shard-00-01.0128p.mongodb.net
+≡ƒôè Database: ecommerce_reseller
+Error: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parse (C:\rnapp\Server_ERA\node_modules\body-parser\lib\types\json.js:92:19)
+    at C:\rnapp\Server_ERA\node_modules\body-parser\lib\read.js:128:18
+    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)
+    at invokeCallback (C:\rnapp\Server_ERA\node_modules\raw-body\index.js:238:16)
+    at done (C:\rnapp\Server_ERA\node_modules\raw-body\index.js:227:7)
+    at IncomingMessage.onEnd (C:\rnapp\Server_ERA\node_modules\raw-body\index.js:287:7)
+    at IncomingMessage.emit (node:events:518:28)
+    at endReadableNT (node:internal/streams/readable:1698:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  expose: true,
+  statusCode: 400,
+  status: 400,
+  body: '{\\',
+  type: 'entity.parse.failed'
+}
+[0mPOST /api/auth/send-otp [33m400[0m 29.066 ms - 915[0m
+Error: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parse (C:\rnapp\Server_ERA\node_modules\body-parser\lib\types\json.js:92:19)
+    at C:\rnapp\Server_ERA\node_modules\body-parser\lib\read.js:128:18
+    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)
+    at invokeCallback (C:\rnapp\Server_ERA\node_modules\raw-body\index.js:238:16)
+    at done (C:\rnapp\Server_ERA\node_modules\raw-body\index.js:227:7)
+    at IncomingMessage.onEnd (C:\rnapp\Server_ERA\node_modules\raw-body\index.js:287:7)
+    at IncomingMessage.emit (node:events:518:28)
+    at endReadableNT (node:internal/streams/readable:1698:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  expose: true,
+  statusCode: 400,
+  status: 400,
+  body: '{\\"phone\\": \\"9876543210\\", \\"type\\": \\"signup\\"}',
+  type: 'entity.parse.failed'
+}
+[0mPOST /api/auth/send-otp [33m400[0m 2.153 ms - 915[0m
+Fast2SMS Error: {
+  status_code: 996,
+  message: 'Before using OTP Message API, complete website verification. Visit OTP Message menu or use DLT SMS API.'
+}
+[0mPOST /api/auth/send-otp [32m200[0m 764.466 ms - 65[0m
+Fast2SMS Error: {
+  status_code: 996,
+  message: 'Before using OTP Message API, complete website verification. Visit OTP Message menu or use DLT SMS API.'
+}
+[0mPOST /api/auth/send-otp [32m200[0m 337.037 ms - 65[0m
+[0mPOST /api/auth/verify-otp [32m200[0m 134.167 ms - 398[0m
+Error: AppError: Phone number already registered
+    at register (file:///C:/rnapp/Server_ERA/controllers/authController.js:135:21)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  statusCode: 400,
+  isOperational: true
+}
+[0mPOST /api/auth/register [33m400[0m 86.502 ms - 278[0m
