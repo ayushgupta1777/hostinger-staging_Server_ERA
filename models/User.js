@@ -12,21 +12,21 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: [true, 'Email is required'],
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    sparse: true // Allows multiple null/undefined values
   },
   phone: {
     type: String,
-    sparse: true, // Allows multiple null values
+    unique: true,
+    sparse: true,
     trim: true
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
     minlength: 6,
-    select: false // Don't include password in queries by default
+    select: false
   },
   role: {
     type: String,
@@ -34,21 +34,21 @@ const userSchema = new mongoose.Schema({
     default: 'customer'
   },
 
-// ADD to your User schema:
-resellerApplication: {
-  status: {
-    type: String,
-    enum: ['none', 'approved'],
-    default: 'none'
+  // ADD to your User schema:
+  resellerApplication: {
+    status: {
+      type: String,
+      enum: ['none', 'approved'],
+      default: 'none'
+    },
+    appliedAt: Date,
+    approvedAt: Date,
+    businessName: String,
+    accountHolderName: String,
+    accountNumber: String,
+    bankName: String,
+    ifscCode: String
   },
-  appliedAt: Date,
-  approvedAt: Date,
-  businessName: String,
-  accountHolderName: String,
-  accountNumber: String,
-  bankName: String,
-  ifscCode: String
-},
 
   avatar: String,
   emailVerified: {
@@ -69,23 +69,23 @@ resellerApplication: {
 });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     return next();
   }
-  
+
   const salt = await bcrypt.genSalt(parseInt(process.env.BCRYPT_SALT) || 10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
 // Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Remove password from JSON response
-userSchema.methods.toJSON = function() {
+userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
   return obj;

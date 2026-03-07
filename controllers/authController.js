@@ -3,8 +3,10 @@ import User from '../models/User.js';
 import Vendor from '../models/Vendor.js';
 import Reseller from '../models/Reseller.js';
 import Wallet from '../models/Wallet.js';
+import OTP from '../models/OTP.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateReferralCode } from '../utils/helpers.js';
+import { sendOTP_SMS } from '../utils/sms.js';
 
 /**
  * Generate JWT token
@@ -16,6 +18,103 @@ const generateToken = (id) => {
 };
 
 /**
+ * @desc    Send OTP for phone verification/login
+ * @route   POST /api/auth/send-otp
+ * @access  Public
+ */
+export const sendOTP = async (req, res, next) => {
+  try {
+    const { phone, type } = req.body; // type: signup, login
+
+    if (!phone) {
+      return next(new AppError('Phone number is required', 400));
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + (parseInt(process.env.OTP_EXPIRE_MINUTES) || 10) * 60000);
+
+    // Save/Update OTP in database
+    await OTP.findOneAndUpdate(
+      { phone },
+      { otp, type: type || 'verification', expiresAt, verified: false },
+      { upsert: true, new: true }
+    );
+
+    // Send via Fast2SMS
+    const smsResult = await sendOTP_SMS(phone, otp);
+
+    if (!smsResult.success && process.env.NODE_ENV === 'production') {
+      return next(new AppError('Failed to send OTP. Please try again.', 500));
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP sent successfully',
+      ...(process.env.NODE_ENV === 'development' && { otp }) // Only for dev debugging
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Verify OTP
+ * @route   POST /api/auth/verify-otp
+ * @access  Public
+ */
+export const verifyOTP = async (req, res, next) => {
+  try {
+    const { phone, otp } = req.body;
+
+    const otpRecord = await OTP.findOne({ phone, otp });
+
+    if (!otpRecord) {
+      return next(new AppError('Invalid OTP', 400));
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      return next(new AppError('OTP expired', 400));
+    }
+
+    // Mark as verified
+    otpRecord.verified = true;
+    await otpRecord.save();
+
+    // Check if user already exists
+    const user = await User.findOne({ phone });
+
+    if (user) {
+      // If user exists, provide token (auto-login)
+      const token = generateToken(user._id);
+      return res.json({
+        success: true,
+        message: 'OTP verified and logged in',
+        data: {
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role
+          },
+          token,
+          isNewUser: false
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP verified successfully',
+      data: { isNewUser: true }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * @desc    Register new user
  * @route   POST /api/auth/register
  * @access  Public
@@ -24,48 +123,39 @@ export const register = async (req, res, next) => {
   try {
     const { name, email, password, phone, role } = req.body;
 
-    // Check if user exists
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return next(new AppError('Email already registered', 400));
+    // 1. If phone is provided, verify it was validated via OTP
+    if (phone) {
+      const otpRecord = await OTP.findOne({ phone, verified: true });
+      if (!otpRecord) {
+        return next(new AppError('Phone number not verified. Please verify OTP first.', 400));
+      }
+
+      const phoneExists = await User.findOne({ phone });
+      if (phoneExists) {
+        return next(new AppError('Phone number already registered', 400));
+      }
+
+      // Cleanup OTP record after registration
+      await OTP.deleteOne({ phone });
+    }
+
+    // 2. Check if email exists if provided
+    if (email) {
+      const emailExists = await User.findOne({ email });
+      if (emailExists) {
+        return next(new AppError('Email already registered', 400));
+      }
     }
 
     // Create user
     const user = await User.create({
       name,
-      email,
-      password,
-      phone,
-      role: role || 'customer'
+      email: email || undefined,
+      password: password || undefined,
+      phone: phone || undefined,
+      role: role || 'customer',
+      phoneVerified: !!phone
     });
-
-    /* 
-    // If registering as vendor, create vendor profile
-    if (role === 'vendor') {
-      await Vendor.create({
-        user: user._id,
-        storeName: name + "'s Store",
-        status: 'pending'
-      });
-    }
-
-    // If registering as reseller, create reseller profile and wallet
-    if (role === 'reseller') {
-      const referralCode = await generateReferralCode();
-      
-      // Create wallet first
-      const wallet = await Wallet.create({
-        user: user._id
-      });
-
-      // Create reseller profile
-      await Reseller.create({
-        user: user._id,
-        referralCode: referralCode,
-        wallet: wallet._id
-      });
-    }
-    */
 
     // Generate token
     const token = generateToken(user._id);
@@ -78,6 +168,7 @@ export const register = async (req, res, next) => {
           id: user._id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
           role: user.role
         },
         token
@@ -95,18 +186,31 @@ export const register = async (req, res, next) => {
  */
 export const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, phone, otp } = req.body;
 
-    // Check if user exists (include password for comparison)
-    const user = await User.findOne({ email }).select('+password');
-    if (!user) {
-      return next(new AppError('Invalid credentials', 401));
+    let user;
+
+    // Option 1: Phone + OTP Login
+    if (phone && otp) {
+      const otpRecord = await OTP.findOne({ phone, otp });
+      if (!otpRecord) return next(new AppError('Invalid OTP', 401));
+      if (otpRecord.expiresAt < new Date()) return next(new AppError('OTP expired', 401));
+
+      user = await User.findOne({ phone });
+      if (!user) return next(new AppError('User not found. Please sign up.', 404));
+
+      // Cleanup
+      await OTP.deleteOne({ phone });
     }
+    // Option 2: Email + Password Login
+    else if (email && password) {
+      user = await User.findOne({ email }).select('+password');
+      if (!user) return next(new AppError('Invalid credentials', 401));
 
-    // Check password
-    const isPasswordMatch = await user.comparePassword(password);
-    if (!isPasswordMatch) {
-      return next(new AppError('Invalid credentials', 401));
+      const isPasswordMatch = await user.comparePassword(password);
+      if (!isPasswordMatch) return next(new AppError('Invalid credentials', 401));
+    } else {
+      return next(new AppError('Please provide email/password or phone/otp', 400));
     }
 
     // Check if user is active
@@ -129,6 +233,7 @@ export const login = async (req, res, next) => {
           id: user._id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
           role: user.role,
           avatar: user.avatar,
           resellerApplication: user.resellerApplication
@@ -149,10 +254,9 @@ export const login = async (req, res, next) => {
 export const getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
+    if (!user) return next(new AppError('User not found', 404));
 
-    let profile = {
-      user
-    };
+    let profile = { user };
 
     // Get vendor details if user is vendor
     if (user.role === 'vendor') {
@@ -182,13 +286,14 @@ export const getMe = async (req, res, next) => {
  */
 export const updateProfile = async (req, res, next) => {
   try {
-    const { name, phone, avatar } = req.body;
+    const { name, phone, avatar, email } = req.body;
 
     const user = await User.findById(req.user.id);
 
     if (name) user.name = name;
     if (phone) user.phone = phone;
     if (avatar) user.avatar = avatar;
+    if (email) user.email = email;
 
     await user.save();
 
@@ -212,6 +317,12 @@ export const changePassword = async (req, res, next) => {
     const { currentPassword, newPassword } = req.body;
 
     const user = await User.findById(req.user.id).select('+password');
+    if (!user.password && newPassword) {
+      // For users who joined via OTP and want to set a password
+      user.password = newPassword;
+      await user.save();
+      return res.json({ success: true, message: 'Password set successfully' });
+    }
 
     // Verify current password
     const isMatch = await user.comparePassword(currentPassword);
@@ -233,73 +344,12 @@ export const changePassword = async (req, res, next) => {
 };
 
 /**
- * @desc    Send OTP for phone verification
- * @route   POST /api/auth/send-otp
- * @access  Private
- */
-export const sendOTP = async (req, res, next) => {
-  try {
-    const { phone } = req.body;
-
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // In production, send OTP via SMS service (Twilio, MSG91, etc.)
-    // For now, we'll just return it in response (ONLY FOR DEVELOPMENT)
-    console.log(`OTP for ${phone}: ${otp}`);
-
-    // Store OTP in cache/database with expiry (implement with Redis in production)
-    // For now, mock response
-    res.json({
-      success: true,
-      message: 'OTP sent successfully',
-      ...(process.env.NODE_ENV === 'development' && { otp }) // Only in dev
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Verify OTP
- * @route   POST /api/auth/verify-otp
- * @access  Private
- */
-export const verifyOTP = async (req, res, next) => {
-  try {
-    const { phone, otp } = req.body;
-
-    // In production, verify OTP from cache/database
-    // For now, mock verification (accept any 6-digit OTP)
-    if (otp && otp.length === 6) {
-      const user = await User.findById(req.user.id);
-      user.phone = phone;
-      user.phoneVerified = true;
-      await user.save();
-
-      res.json({
-        success: true,
-        message: 'Phone verified successfully',
-        data: { user }
-      });
-    } else {
-      return next(new AppError('Invalid OTP', 400));
-    }
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
  * @desc    Logout user
  * @route   POST /api/auth/logout
  * @access  Private
  */
 export const logout = async (req, res, next) => {
   try {
-    // In a more complex setup with refresh tokens, 
-    // you would invalidate the refresh token here
-
     res.json({
       success: true,
       message: 'Logged out successfully'

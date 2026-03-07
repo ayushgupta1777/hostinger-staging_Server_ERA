@@ -19,8 +19,9 @@ export const validate = (req, res, next) => {
  */
 export const registerValidation = [
   body('name').trim().notEmpty().withMessage('Name is required'),
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('phone').optional().isLength({ min: 10, max: 15 }).withMessage('Valid phone number is required'),
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').optional().isIn(['customer', 'vendor', 'reseller']).withMessage('Invalid role')
 ];
 
@@ -28,8 +29,10 @@ export const registerValidation = [
  * Login validation rules
  */
 export const loginValidation = [
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('password').notEmpty().withMessage('Password is required')
+  body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('phone').optional().isLength({ min: 10, max: 15 }).withMessage('Valid phone number is required'),
+  body('password').optional().notEmpty().withMessage('Password is required'),
+  body('otp').optional().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
 ];
 
 /**
@@ -52,7 +55,7 @@ export const productValidation = [
 export const orderValidation = [
   // REMOVED: body('items').isArray({ min: 1 }).withMessage('Order must contain at least one item'),
   // Items come from cart in database, validated in controller
-  
+
   body('shippingAddress').notEmpty().withMessage('Shipping address is required'),
   body('shippingAddress.name').trim().notEmpty().withMessage('Recipient name is required'),
   body('shippingAddress.phone').trim().notEmpty().withMessage('Phone number is required')

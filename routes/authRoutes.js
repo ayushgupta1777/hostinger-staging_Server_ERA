@@ -26,8 +26,8 @@ router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
 router.put('/password', protect, changePassword);
-router.post('/send-otp', protect, sendOTP);
-router.post('/verify-otp', protect, verifyOTP);
+router.post('/send-otp', sendOTP);
+router.post('/verify-otp', verifyOTP);
 
 /**
  * @desc    Upload user avatar
