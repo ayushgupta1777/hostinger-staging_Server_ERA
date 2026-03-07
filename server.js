@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import connectDB from './config/database.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './config/swagger.js';
+import { initializeFirebase } from './config/firebase.js';
 
 import Product from './models/Product.js';
 
@@ -48,6 +49,9 @@ const app = express();
 
 // Connect to MongoDB
 connectDB();
+
+// Initialize Firebase Admin
+initializeFirebase();
 
 // Middleware
 app.use(helmet({

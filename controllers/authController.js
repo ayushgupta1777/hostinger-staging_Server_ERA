@@ -3,10 +3,9 @@ import User from '../models/User.js';
 import Vendor from '../models/Vendor.js';
 import Reseller from '../models/Reseller.js';
 import Wallet from '../models/Wallet.js';
-import OTP from '../models/OTP.js';
+import { admin } from '../config/firebase.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateReferralCode } from '../utils/helpers.js';
-import { sendOTP_SMS } from '../utils/sms.js';
 
 /**
  * Generate JWT token
@@ -18,85 +17,47 @@ const generateToken = (id) => {
 };
 
 /**
- * @desc    Send OTP for phone verification/login
- * @route   POST /api/auth/send-otp
+ * @desc    Verify Firebase ID Token and return user data
+ * @route   POST /api/auth/verify-firebase
  * @access  Public
  */
-export const sendOTP = async (req, res, next) => {
+export const verifyFirebaseToken = async (req, res, next) => {
   try {
-    const { phone, type } = req.body; // type: signup, login
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return next(new AppError('Firebase ID token is required', 400));
+    }
+
+    // Verify the ID token using Firebase Admin SDK
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const { phone_number: phone, uid: firebaseUid } = decodedToken;
 
     if (!phone) {
-      return next(new AppError('Phone number is required', 400));
+      return next(new AppError('Phone number not found in token', 400));
     }
-
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + (parseInt(process.env.OTP_EXPIRE_MINUTES) || 10) * 60000);
-
-    // Save/Update OTP in database
-    await OTP.findOneAndUpdate(
-      { phone },
-      { otp, type: type || 'verification', expiresAt, verified: false },
-      { upsert: true, new: true }
-    );
-
-    // Send via Fast2SMS
-    const smsResult = await sendOTP_SMS(phone, otp);
-
-    if (!smsResult.success && process.env.NODE_ENV === 'production') {
-      return next(new AppError('Failed to send OTP. Please try again.', 500));
-    }
-
-    res.json({
-      success: true,
-      message: 'OTP sent successfully',
-      ...(process.env.NODE_ENV === 'development' && { otp }) // Only for dev debugging
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Verify OTP
- * @route   POST /api/auth/verify-otp
- * @access  Public
- */
-export const verifyOTP = async (req, res, next) => {
-  try {
-    const { phone, otp } = req.body;
-
-    const otpRecord = await OTP.findOne({ phone, otp });
-
-    if (!otpRecord) {
-      return next(new AppError('Invalid OTP', 400));
-    }
-
-    if (otpRecord.expiresAt < new Date()) {
-      return next(new AppError('OTP expired', 400));
-    }
-
-    // Mark as verified
-    otpRecord.verified = true;
-    await otpRecord.save();
 
     // Check if user already exists
-    const user = await User.findOne({ phone });
+    let user = await User.findOne({ phone });
 
     if (user) {
       // If user exists, provide token (auto-login)
+      user.lastLoginAt = new Date();
+      await user.save();
+
       const token = generateToken(user._id);
       return res.json({
         success: true,
-        message: 'OTP verified and logged in',
+        message: 'Logged in successfully',
         data: {
           user: {
             id: user._id,
             name: user.name,
             email: user.email,
             phone: user.phone,
-            role: user.role
+            role: user.role,
+            avatar: user.avatar,
+            resellerApplication: user.resellerApplication
           },
           token,
           isNewUser: false
@@ -104,42 +65,49 @@ export const verifyOTP = async (req, res, next) => {
       });
     }
 
+    // If new user, return success and flag for registration
     res.json({
       success: true,
-      message: 'OTP verified successfully',
-      data: { isNewUser: true }
+      message: 'Token verified. Please complete registration.',
+      data: {
+        isNewUser: true,
+        phone
+      }
     });
   } catch (error) {
-    next(error);
+    console.error('Firebase token verification error:', error);
+    next(new AppError('Invalid or expired Firebase token', 401));
   }
 };
 
 /**
- * @desc    Register new user
+ * @desc    Register new user (Firebase verified)
  * @route   POST /api/auth/register
  * @access  Public
  */
 export const register = async (req, res, next) => {
   try {
-    const { name, email, password, phone, role } = req.body;
+    const { name, email, password, phone, role, idToken } = req.body;
 
-    // 1. If phone is provided, verify it was validated via OTP
-    if (phone) {
-      const otpRecord = await OTP.findOne({ phone, verified: true });
-      if (!otpRecord) {
-        return next(new AppError('Phone number not verified. Please verify OTP first.', 400));
+    // 1. Verify phone via Firebase if idToken is provided
+    if (idToken) {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      if (decodedToken.phone_number !== phone) {
+        return next(new AppError('Phone number mismatch with token', 400));
       }
+    } else if (phone && process.env.NODE_ENV === 'production') {
+      return next(new AppError('Firebase verification required for phone registration', 400));
+    }
 
+    // 2. Check if phone exists
+    if (phone) {
       const phoneExists = await User.findOne({ phone });
       if (phoneExists) {
         return next(new AppError('Phone number already registered', 400));
       }
-
-      // Cleanup OTP record after registration
-      await OTP.deleteOne({ phone });
     }
 
-    // 2. Check if email exists if provided
+    // 3. Check if email exists if provided
     if (email) {
       const emailExists = await User.findOne({ email });
       if (emailExists) {
@@ -180,27 +148,23 @@ export const register = async (req, res, next) => {
 };
 
 /**
- * @desc    Login user
+ * @desc    Login user (Support both Email/Password and Firebase)
  * @route   POST /api/auth/login
  * @access  Public
  */
 export const login = async (req, res, next) => {
   try {
-    const { email, password, phone, otp } = req.body;
+    const { email, password, idToken } = req.body;
 
     let user;
 
-    // Option 1: Phone + OTP Login
-    if (phone && otp) {
-      const otpRecord = await OTP.findOne({ phone, otp });
-      if (!otpRecord) return next(new AppError('Invalid OTP', 401));
-      if (otpRecord.expiresAt < new Date()) return next(new AppError('OTP expired', 401));
+    // Option 1: Firebase ID Token Login (Phone)
+    if (idToken) {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const phone = decodedToken.phone_number;
 
       user = await User.findOne({ phone });
       if (!user) return next(new AppError('User not found. Please sign up.', 404));
-
-      // Cleanup
-      await OTP.deleteOne({ phone });
     }
     // Option 2: Email + Password Login
     else if (email && password) {
@@ -210,7 +174,7 @@ export const login = async (req, res, next) => {
       const isPasswordMatch = await user.comparePassword(password);
       if (!isPasswordMatch) return next(new AppError('Invalid credentials', 401));
     } else {
-      return next(new AppError('Please provide email/password or phone/otp', 400));
+      return next(new AppError('Please provide email/password or Firebase token', 400));
     }
 
     // Check if user is active
