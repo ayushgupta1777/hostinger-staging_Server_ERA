@@ -3,10 +3,13 @@ import { AppError } from '../middleware/errorHandler.js';
 
 export const getAllProducts = async (req, res, next) => {
   try {
-    const { status, search, page = 1, limit = 20 } = req.query;
+    const { status, search, category, subcategory, page = 1, limit = 20 } = req.query;
 
     const query = {};
     if (status && status !== 'all') query.status = status;
+    if (category && category !== 'all') query.category = category;
+    if (subcategory && subcategory !== 'all') query.subcategory = subcategory;
+
     if (search) {
       query.$or = [
         { title: new RegExp(search, 'i') },
