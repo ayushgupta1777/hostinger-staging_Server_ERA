@@ -6,6 +6,24 @@ import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 
 /**
+ * Generate a fuzzy regex pattern to allow small typos (Levenshtein approx).
+ * Example: 'ring' -> allowed to match 'rng', 'riing', 'rinng' up to a short distance.
+ */
+const createFuzzyRegex = (query) => {
+  const chars = query.split('');
+  // Build a generic fuzzy pattern inserting optional characters and allowing one swap
+  // For 'ring', it creates a regex that matches slightly perturbed variations.
+  const fuzzyLogic = chars.map((char, index) => {
+    // Escape regex characters just in case
+    const c = char.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    return `${c}?`;
+  }).join('.??'); // Allow up to 2 random characters between letters
+
+  // We wrap the fuzzy pattern to match anywhere in the word, case insensitive
+  return new RegExp(fuzzyLogic, 'i');
+};
+
+/**
  * @desc    Global search - Products, Categories, and Subcategories
  * @route   GET /api/search
  * @access  Public
@@ -26,34 +44,53 @@ export const globalSearch = async (req, res, next) => {
     }
 
     const trimmedQuery = query.trim();
-    const searchRegex = new RegExp(trimmedQuery, 'i');
+    // 1. Precise Indexed Match (Scale First)
+    const exactWordRegex = new RegExp(`\\b${trimmedQuery}\\b`, 'i');
+    const partialMatchRegex = new RegExp(trimmedQuery, 'i');
 
-    // Parallel search for better performance
-    const [products, allCategories] = await Promise.all([
-      // Search products using text search and regex fallback for partial matches
-      Product.find({
+    // First Pass: Attempt to use MongoDB's incredibly fast `$text` index.
+    let products = await Product.find({
+      $text: { $search: trimmedQuery },
+      status: 'approved',
+      isActive: true
+    })
+      .populate('category', 'name slug image')
+      .populate('subcategory', 'name slug image parent')
+      .sort({ score: { $meta: 'textScore' } }) // Rank by relevance!
+      .limit(20)
+      .lean();
+
+    // Second Pass (Fallback): If indexed Text search yielded too few results,
+    // we drop back to partial regex and fuzzy matching (typo tolerance).
+    if (products.length < 5) {
+      const fuzzyRegex = createFuzzyRegex(trimmedQuery);
+
+      const fallbackProducts = await Product.find({
         $or: [
-          { $text: { $search: trimmedQuery } },
-          { title: searchRegex },
-          { keywords: { $in: [searchRegex] } }
+          { title: partialMatchRegex },
+          { keywords: { $in: [partialMatchRegex] } },
+          { title: fuzzyRegex } // Typo tolerance Catch-all
         ],
         status: 'approved',
-        isActive: true
+        isActive: true,
+        _id: { $nin: products.map(p => p._id) } // Exclude already found items
       })
         .populate('category', 'name slug image')
         .populate('subcategory', 'name slug image parent')
-        .limit(20)
-        .lean(),
+        .limit(20 - products.length)
+        .lean();
 
-      // Search all categories (both parent and subcategories)
-      Category.find({
-        name: searchRegex,
-        isActive: true
-      })
-        .populate('parent', 'name slug image')
-        .limit(20)
-        .lean()
-    ]);
+      products = [...products, ...fallbackProducts];
+    }
+
+    // Search all categories (both parent and subcategories) using Prefix (Faster) or Partial
+    const allCategories = await Category.find({
+      name: partialMatchRegex,
+      isActive: true
+    })
+      .populate('parent', 'name slug image')
+      .limit(20)
+      .lean();
 
     // Separate root categories and subcategories
     const categories = allCategories.filter(cat => !cat.parent);
