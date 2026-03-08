@@ -17,7 +17,7 @@ export const sendOTP_MSG91 = async (phone) => {
         const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
 
         // Force MSG91 to generate the OTP internally, specifying properties it expects
-        const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}&otp_length=4&otp_expiry=15`;
+        const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}&otp_length=4&otp_expiry=15&sender=${process.env.MSG91_SENDER_ID}`;
 
         // We pass an empty payload so MSG91 generates the OTP internally for its verification system
         const response = await axios.post(url, {}, {
