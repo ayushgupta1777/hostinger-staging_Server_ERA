@@ -385,6 +385,87 @@ class ShiprocketService {
     const hash = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
     return hash === signature;
   }
+
+  /**
+   * Complete end-to-end shipment process for an Order document
+   * Used for auto-sync and bulk sync tasks
+   */
+  async processOrderShipment(order) {
+    if (!order) throw new AppError('Order not found', 404);
+    if (order.shiprocket && order.shiprocket.shipmentId) {
+      console.log(`[Shiprocket] Shipment already exists for order ${order.orderNo}`);
+      return { success: true, message: 'Already created' };
+    }
+
+    // Auto-sync pickup locations if empty
+    const settings = await ShiprocketSettings.findOne({ isActive: true });
+    if (!settings) throw new AppError('Shiprocket settings not configured', 500);
+
+    if (!settings.pickupLocations || settings.pickupLocations.length === 0) {
+      try {
+        const locations = await this.getPickupLocations();
+        if (locations && locations.length > 0) {
+          settings.pickupLocations = locations.map((loc, index) => ({
+            id: loc.id,
+            name: loc.pickup_location,
+            phone: loc.phone,
+            email: loc.email,
+            address: loc.address,
+            city: loc.city,
+            state: loc.state,
+            pincode: loc.pin_code,
+            isDefault: index === 0
+          }));
+          await settings.save();
+        }
+      } catch (syncError) {
+        console.error('[Shiprocket] Failed to auto-sync pickup locations:', syncError.message);
+      }
+    }
+
+    // 1. Create shipment
+    const result = await this.createOrder(order);
+
+    order.shiprocket = {
+      orderId: result.orderId,
+      shipmentId: result.shipmentId
+    };
+
+    // 2. Generate AWB
+    try {
+      const awbResult = await this.generateAWB(result.shipmentId);
+      order.shiprocket.awb = awbResult.awb;
+      order.shiprocket.courierName = awbResult.courierName;
+      order.trackingNumber = awbResult.awb;
+      order.courierName = awbResult.courierName;
+
+      // Auto upgrade status to shipped
+      order.orderStatus = 'shipped';
+      if (!order.statusHistory) order.statusHistory = [];
+      order.statusHistory.push({
+        from: 'processing',
+        to: 'shipped',
+        changedAt: new Date(),
+        reason: 'Automated Shiprocket Sync'
+      });
+      order.shippedAt = new Date();
+    } catch (err) {
+      console.error(`[Shiprocket] Failed to generate AWB for ${order.orderNo}:`, err.message);
+    }
+
+    // 3. Schedule pickup
+    if (order.shiprocket.shipmentId) {
+      try {
+        const pickupResult = await this.schedulePickup(result.shipmentId);
+        order.shiprocket.pickupScheduledDate = pickupResult.pickupScheduledDate;
+      } catch (err) {
+        console.error(`[Shiprocket] Failed to schedule pickup for ${order.orderNo}:`, err.message);
+      }
+    }
+
+    await order.save();
+    return { success: true, order };
+  }
 }
 
 export default new ShiprocketService();

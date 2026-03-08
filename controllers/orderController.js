@@ -3,6 +3,9 @@ import Cart from '../models/Cart.js';
 import Product from '../models/Product.js';
 import Wallet from '../models/Wallet.js';
 import Coupon from '../models/Coupon.js';
+import ShiprocketSettings from '../models/ShiprocketSettings.js';
+import shiprocketService from '../services/shiprocketService.js';
+import notificationService from '../services/notificationService.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 // Generate unique order number
@@ -204,6 +207,22 @@ export const createOrder = async (req, res, next) => {
     // Populate for response
     await order.populate('items.product', 'title images');
 
+    // Auto Create Shipment if enabled and COD
+    if (paymentMethod === 'cod') {
+      setTimeout(async () => {
+        try {
+          const settings = await ShiprocketSettings.findOne({ isActive: true });
+          if (settings && settings.autoCreateShipment) {
+            console.log(`[Shiprocket] Auto-creating shipment for COD order ${order.orderNo}`);
+            const populatedOrder = await Order.findById(order._id).populate('user').populate('items.product');
+            await shiprocketService.processOrderShipment(populatedOrder);
+          }
+        } catch (err) {
+          console.error(`[Shiprocket] Auto Create Shipment failed for order ${order.orderNo}:`, err.message);
+        }
+      }, 0);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
@@ -270,6 +289,23 @@ export const updatePaymentStatus = async (req, res, next) => {
     }
 
     await order.save();
+
+    // Auto Create Shipment if enabled and Online Payment Completed
+    if (paymentStatus === 'completed') {
+      setTimeout(async () => {
+        try {
+          const settings = await ShiprocketSettings.findOne({ isActive: true });
+          if (settings && settings.autoCreateShipment) {
+            console.log(`[Shiprocket] Auto-creating shipment for Paid online order ${order.orderNo}`);
+            const populatedOrder = await Order.findById(order._id).populate('user').populate('items.product');
+            await shiprocketService.processOrderShipment(populatedOrder);
+          }
+        } catch (err) {
+          console.error(`[Shiprocket] Auto Create Shipment failed for Paid order ${order.orderNo}:`, err.message);
+        }
+      }, 0);
+    }
+
     res.json({ success: true, data: { order } });
   } catch (error) {
     next(error);

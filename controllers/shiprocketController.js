@@ -466,3 +466,56 @@ export const setDefaultPickupLocation = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * @desc    Bulk sync pending orders
+ * @route   POST /api/shiprocket/bulk-sync
+ * @access  Private (Admin)
+ */
+export const bulkSyncPendingOrders = async (req, res, next) => {
+  try {
+    const settings = await ShiprocketSettings.findOne({ isActive: true });
+
+    if (!settings) {
+      return next(new AppError('Shiprocket settings not configured', 400));
+    }
+
+    // Find confirmed or processing orders without shipmentId
+    const pendingOrders = await Order.find({
+      orderStatus: { $in: ['confirmed', 'processing'] },
+      $or: [
+        { 'shiprocket.shipmentId': { $exists: false } },
+        { 'shiprocket.shipmentId': null }
+      ]
+    }).populate('user').populate('items.product').limit(100); // 100 max per invoke manually
+
+    if (pendingOrders.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending orders found to sync.'
+      });
+    }
+
+    // Process asynchronously so we don't block the request
+    setTimeout(async () => {
+      console.log(`[Shiprocket Manual Bulk Sync] Started processing ${pendingOrders.length} orders...`);
+      for (const order of pendingOrders) {
+        try {
+          await shiprocketService.processOrderShipment(order);
+          // Standard delay to avoid API rate limits
+          await new Promise(resolve => setTimeout(resolve, 350));
+        } catch (err) {
+          console.error(`[Bulk Sync] Failed for order ${order.orderNo}:`, err.message);
+        }
+      }
+      console.log(`[Shiprocket Manual Bulk Sync] Completed.`);
+    }, 0);
+
+    res.json({
+      success: true,
+      message: `Bulk sync started for ${pendingOrders.length} pending orders. This process will complete in the background.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
