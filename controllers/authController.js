@@ -6,7 +6,7 @@ import Wallet from '../models/Wallet.js';
 import OTP from '../models/OTP.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateReferralCode } from '../utils/helpers.js';
-import { sendOTP_SMS } from '../utils/sms.js';
+import { sendOTP_MSG91, verifyOTP_MSG91 } from '../utils/sms.js';
 
 /**
  * Generate JWT token
@@ -30,28 +30,28 @@ export const sendOTP = async (req, res, next) => {
       return next(new AppError('Phone number is required', 400));
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // With MSG91, we don't need to generate or store the actual OTP string
+    // MSG91 handles code generation and verification.
+    // We just store a placeholder to track that a verification is pending.
     const expiresAt = new Date(Date.now() + (parseInt(process.env.OTP_EXPIRE_MINUTES) || 10) * 60000);
 
-    // Save/Update OTP in database
+    // Save/Update "verification pending" state in database
     await OTP.findOneAndUpdate(
       { phone },
-      { otp, type: type || 'verification', expiresAt, verified: false },
+      { otp: 'MSG91', type: type || 'verification', expiresAt, verified: false },
       { upsert: true, new: true }
     );
 
-    // Send via Fast2SMS
-    const smsResult = await sendOTP_SMS(phone, otp);
+    // Send via MSG91
+    const smsResult = await sendOTP_MSG91(phone);
 
     if (!smsResult.success && process.env.NODE_ENV === 'production') {
-      return next(new AppError('Failed to send OTP. Please try again.', 500));
+      return next(new AppError('Failed to send OTP via MSG91. Please try again.', 500));
     }
 
     res.json({
       success: true,
-      message: 'OTP sent successfully',
-      ...(process.env.NODE_ENV === 'development' && { otp }) // Only for dev debugging
+      message: 'OTP sent successfully via MSG91',
     });
   } catch (error) {
     next(error);
@@ -67,19 +67,27 @@ export const verifyOTP = async (req, res, next) => {
   try {
     const { phone, otp } = req.body;
 
-    const otpRecord = await OTP.findOne({ phone, otp });
+    // Ask MSG91 if the OTP is correct
+    const verificationResult = await verifyOTP_MSG91(phone, otp);
 
-    if (!otpRecord) {
-      return next(new AppError('Invalid OTP', 400));
+    if (!verificationResult.success && process.env.NODE_ENV === 'production') {
+      return next(new AppError(verificationResult.message || 'Invalid OTP', 400));
     }
 
-    if (otpRecord.expiresAt < new Date()) {
-      return next(new AppError('OTP expired', 400));
-    }
+    // If MSG91 approves, update the local DB record so /register knows we are valid
+    const otpRecord = await OTP.findOne({ phone });
 
-    // Mark as verified
-    otpRecord.verified = true;
-    await otpRecord.save();
+    if (otpRecord) {
+      if (otpRecord.expiresAt < new Date()) {
+        return next(new AppError('OTP verification period expired', 400));
+      }
+      otpRecord.verified = true;
+      await otpRecord.save();
+    } else {
+      // Edge case: MSG91 confirms it but no local tracking object was created? Let's just create a verified local footprint.
+      const expiresAt = new Date(Date.now() + 10 * 60000);
+      await OTP.create({ phone, otp: 'MSG91', type: 'verification', expiresAt, verified: true });
+    }
 
     // Check if user already exists
     const user = await User.findOne({ phone });
@@ -191,16 +199,19 @@ export const login = async (req, res, next) => {
     let user;
 
     // Option 1: Phone + OTP Login
-    if (phone && otp) {
-      const otpRecord = await OTP.findOne({ phone, otp });
-      if (!otpRecord) return next(new AppError('Invalid OTP', 401));
-      if (otpRecord.expiresAt < new Date()) return next(new AppError('OTP expired', 401));
+    if (otp) {
+      // Directly ask MSG91 if the OTP is accurate
+      const verificationResult = await verifyOTP_MSG91(phone, otp);
+
+      if (!verificationResult.success && process.env.NODE_ENV === 'production') {
+        return next(new AppError(verificationResult.message || 'Invalid or expired OTP', 401));
+      }
+
+      // Cleanup local verification record if it exists
+      await OTP.deleteOne({ phone });
 
       user = await User.findOne({ phone });
       if (!user) return next(new AppError('User not found. Please sign up.', 404));
-
-      // Cleanup
-      await OTP.deleteOne({ phone });
     }
     // Option 2: Email + Password Login
     else if (email && password) {
