@@ -12,20 +12,15 @@ export const sendOTP_MSG91 = async (phone) => {
             return { success: false, message: 'MSG91 API keys missing in environment' };
         }
 
-        // Clean phone number (MSG91 requires country code, assume 91 for India if exactly 10 digits)
-        const formattedPhone = phone.length === 10 ? `91${phone}` : phone;
+        // Clean phone number (MSG91 requires country code, remove symbols like +, -, spaces)
+        const cleanPhone = String(phone).replace(/\D/g, '');
+        const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
 
-        const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}`;
+        // Force MSG91 to generate the OTP internally, specifying properties it expects
+        const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}&otp_length=4&otp_expiry=15`;
 
-        // Instead of letting MSG91 blindly generate, we dictate the OTP and provide sender id
-        // incase the template fails to interpolate.
-        const generatedOtp = Math.floor(1000 + Math.random() * 9000); // 4 Digit
-
-        const payload = {
-            otp: String(generatedOtp),
-        };
-
-        const response = await axios.post(url, payload, {
+        // We pass an empty payload so MSG91 generates the OTP internally for its verification system
+        const response = await axios.post(url, {}, {
             headers: {
                 'authkey': process.env.MSG91_AUTH_KEY,
                 'Content-Type': 'application/JSON'
@@ -58,11 +53,16 @@ export const verifyOTP_MSG91 = async (phone, otp) => {
             return { success: false, message: 'MSG91 API keys missing in environment' };
         }
 
-        const formattedPhone = phone.length === 10 ? `91${phone}` : phone;
+        const cleanPhone = String(phone).replace(/\D/g, '');
+        const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
 
-        const url = `https://control.msg91.com/api/v5/otp/verify?otp=${otp}&mobile=${formattedPhone}&authkey=${process.env.MSG91_AUTH_KEY}`;
+        const url = `https://control.msg91.com/api/v5/otp/verify?otp=${otp}&mobile=${formattedPhone}`;
 
-        const response = await axios.get(url);
+        const response = await axios.get(url, {
+            headers: {
+                'authkey': process.env.MSG91_AUTH_KEY,
+            }
+        });
 
         if (response.data && response.data.type === 'success') {
             return { success: true, message: 'OTP verified successfully' };
