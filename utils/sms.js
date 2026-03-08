@@ -15,9 +15,16 @@ export const sendOTP_MSG91 = async (phone) => {
         // Clean phone number (MSG91 requires country code, assume 91 for India if exactly 10 digits)
         const formattedPhone = phone.length === 10 ? `91${phone}` : phone;
 
-        const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}&authkey=${process.env.MSG91_AUTH_KEY}&sender=${process.env.MSG91_SENDER_ID}`;
+        const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}`;
 
-        const response = await axios.post(url, {});
+        const response = await axios.post(url, {}, {
+            headers: {
+                'authkey': process.env.MSG91_AUTH_KEY,
+                'Content-Type': 'application/JSON'
+            }
+        });
+
+        console.log('MSG91 Raw Post Response:', response.data);
 
         if (response.data && response.data.type === 'success') {
             return { success: true, message: 'OTP sent successfully' };
