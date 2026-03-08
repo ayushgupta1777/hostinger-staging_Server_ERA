@@ -10,7 +10,6 @@ export const getAllProducts = async (req, res, next) => {
     if (search) {
       query.$or = [
         { title: new RegExp(search, 'i') },
-        { description: new RegExp(search, 'i') },
         { sku: new RegExp(search, 'i') }
       ];
 
