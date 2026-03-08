@@ -45,8 +45,8 @@ export const sendOTP = async (req, res, next) => {
     // Send via MSG91
     const smsResult = await sendOTP_MSG91(phone);
 
-    if (!smsResult.success && process.env.NODE_ENV === 'production') {
-      return next(new AppError('Failed to send OTP via MSG91. Please try again.', 500));
+    if (!smsResult.success) {
+      return next(new AppError(`Failed to send OTP via MSG91: ${smsResult.message}`, 500));
     }
 
     res.json({
@@ -70,7 +70,7 @@ export const verifyOTP = async (req, res, next) => {
     // Ask MSG91 if the OTP is correct
     const verificationResult = await verifyOTP_MSG91(phone, otp);
 
-    if (!verificationResult.success && process.env.NODE_ENV === 'production') {
+    if (!verificationResult.success) {
       return next(new AppError(verificationResult.message || 'Invalid OTP', 400));
     }
 
@@ -203,7 +203,7 @@ export const login = async (req, res, next) => {
       // Directly ask MSG91 if the OTP is accurate
       const verificationResult = await verifyOTP_MSG91(phone, otp);
 
-      if (!verificationResult.success && process.env.NODE_ENV === 'production') {
+      if (!verificationResult.success) {
         return next(new AppError(verificationResult.message || 'Invalid or expired OTP', 401));
       }
 

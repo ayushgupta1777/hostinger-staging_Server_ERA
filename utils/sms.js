@@ -9,10 +9,7 @@ export const sendOTP_MSG91 = async (phone) => {
     try {
         if (!process.env.MSG91_AUTH_KEY || !process.env.MSG91_TEMPLATE_ID || !process.env.MSG91_SENDER_ID) {
             console.warn('MSG91 configuration variables missing from .env');
-            if (process.env.NODE_ENV === 'development') {
-                return { success: true, message: 'Simulated OTP send' };
-            }
-            return { success: false, message: 'MSG91 API keys missing' };
+            return { success: false, message: 'MSG91 API keys missing in environment' };
         }
 
         // Clean phone number (MSG91 requires country code, assume 91 for India if exactly 10 digits)
@@ -43,10 +40,7 @@ export const sendOTP_MSG91 = async (phone) => {
 export const verifyOTP_MSG91 = async (phone, otp) => {
     try {
         if (!process.env.MSG91_AUTH_KEY) {
-            if (process.env.NODE_ENV === 'development') {
-                return { success: true, message: 'Simulated OTP verification' };
-            }
-            return { success: false, message: 'MSG91 API keys missing' };
+            return { success: false, message: 'MSG91 API keys missing in environment' };
         }
 
         const formattedPhone = phone.length === 10 ? `91${phone}` : phone;
