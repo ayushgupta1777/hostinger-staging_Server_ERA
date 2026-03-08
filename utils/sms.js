@@ -12,12 +12,16 @@ export const sendOTP_MSG91 = async (phone) => {
             return { success: false, message: 'MSG91 API keys missing in environment' };
         }
 
-        // Clean phone number (MSG91 requires country code, remove symbols like +, -, spaces)
+        // Clean phone number: MSG91 strictly requires Country Code.
         const cleanPhone = String(phone).replace(/\D/g, '');
-        const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+        // Take the last 10 digits (ignoring any user-typed +91 or 0 prefix) and force 91
+        const final10Digits = cleanPhone.slice(-10);
+        const formattedPhone = `91${final10Digits}`;
 
         // Force MSG91 to generate the OTP internally, specifying properties it expects
         const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}&otp_length=4&otp_expiry=15&sender=${process.env.MSG91_SENDER_ID}`;
+
+        console.log(`[MSG91 DEBUG] Firing OTP to clean phone string: ${formattedPhone}`);
 
         // We pass an empty payload so MSG91 generates the OTP internally for its verification system
         const response = await axios.post(url, {}, {
@@ -54,7 +58,8 @@ export const verifyOTP_MSG91 = async (phone, otp) => {
         }
 
         const cleanPhone = String(phone).replace(/\D/g, '');
-        const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+        const final10Digits = cleanPhone.slice(-10);
+        const formattedPhone = `91${final10Digits}`;
 
         const url = `https://control.msg91.com/api/v5/otp/verify?otp=${otp}&mobile=${formattedPhone}`;
 
