@@ -17,7 +17,15 @@ export const sendOTP_MSG91 = async (phone) => {
 
         const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}`;
 
-        const response = await axios.post(url, {}, {
+        // Instead of letting MSG91 blindly generate, we dictate the OTP and provide sender id
+        // incase the template fails to interpolate.
+        const generatedOtp = Math.floor(1000 + Math.random() * 9000); // 4 Digit
+
+        const payload = {
+            otp: String(generatedOtp),
+        };
+
+        const response = await axios.post(url, payload, {
             headers: {
                 'authkey': process.env.MSG91_AUTH_KEY,
                 'Content-Type': 'application/JSON'
