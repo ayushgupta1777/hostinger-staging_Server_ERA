@@ -41,33 +41,25 @@ class ShiprocketService {
 
     // Login to get new token
     try {
-      console.log(`[Shiprocket] Attempting login for email: ${settings.email}`);
+      console.log(`🔐 Authenticating with Shiprocket as: ${settings.email} (Pwd Len: ${settings.password?.length})`);
       const response = await axios.post(`${SHIPROCKET_BASE_URL}/auth/login`, {
         email: settings.email,
         password: settings.password
       });
 
       this.token = response.data.token;
-      // Token expires in 10 days according to Shiprocket documentation
+      // Token expires in 10 days
       this.tokenExpiresAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
 
-      // Save token to DB to avoid frequent logins
+      // Save token
       settings.token = this.token;
       settings.tokenExpiresAt = this.tokenExpiresAt;
       await settings.save();
 
-      console.log(`[Shiprocket] Token successfully refreshed for ${settings.email}`);
       return this.token;
     } catch (error) {
-      const shiprocketError = error.response?.data;
-      console.error('[Shiprocket] Authentication Failure:', {
-        status: error.response?.status,
-        data: shiprocketError,
-        message: error.message
-      });
-
-      const errorMsg = shiprocketError?.message || 'Invalid email and password combination';
-      throw new AppError(`Shiprocket Login Failed: ${errorMsg}`, error.response?.status === 401 ? 401 : 500);
+      console.error('Shiprocket login error:', error.response?.data || error.message);
+      throw new AppError('Failed to authenticate with Shiprocket', 500);
     }
   }
 
@@ -97,9 +89,9 @@ class ShiprocketService {
   }
 
   /**
-   * Make authenticated request to Shiprocket with automatic retry on 401
+   * Make authenticated request to Shiprocket
    */
-  async request(method, endpoint, data = null, retry = true) {
+  async request(method, endpoint, data = null) {
     const token = await this.getToken();
 
     try {
@@ -109,8 +101,7 @@ class ShiprocketService {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        },
-        timeout: 30000 // 30 second timeout
+        }
       };
 
       if (data) {
@@ -120,30 +111,10 @@ class ShiprocketService {
       const response = await axios(config);
       return response.data;
     } catch (error) {
-      // If unauthorized (401), clear the token locally and in DB, then retry once
-      if (error.response?.status === 401 && retry) {
-        console.warn(`[Shiprocket] Received 401 Unauthorized for ${endpoint}. Clearing token and retrying...`);
-        this.token = null;
-        this.tokenExpiresAt = null;
-
-        try {
-          // Explicitly clear token in DB so other requests don't use the same stale token
-          await ShiprocketSettings.updateOne({ isActive: true }, { $unset: { token: 1, tokenExpiresAt: 1 } });
-        } catch (dbErr) {
-          console.error('[Shiprocket] Database error while clearing token:', dbErr.message);
-        }
-
-        return this.request(method, endpoint, data, false);
-      }
-
-      const status = error.response?.status || 500;
-      const shiprocketMessage = error.response?.data?.message || error.message;
-
-      console.error(`[Shiprocket] API Error [${status}] at [${endpoint}]:`, error.response?.data || error.message);
-
+      console.error('Shiprocket API error:', error.response?.data || error.message);
       throw new AppError(
-        `Shiprocket API Error: ${shiprocketMessage}`,
-        status
+        error.response?.data?.message || 'Shiprocket API request failed',
+        error.response?.status || 500
       );
     }
   }
@@ -157,15 +128,39 @@ class ShiprocketService {
       throw new AppError('Shiprocket settings not configured', 500);
     }
 
-    const pickupLocation = settings.pickupLocations.find(loc => loc.isDefault) || settings.pickupLocations[0];
-    if (!pickupLocation) {
-      throw new AppError('No pickup locations found. Please fetch and configure pickup locations in Admin Settings.', 500);
+    // ── Resolve pickup location name ──────────────────────────────────────
+    // Priority 1: Admin-entered manual name (works even when Shiprocket API is unreachable)
+    let pickupLocationName = settings.defaultPickupName?.trim();
+
+    if (!pickupLocationName) {
+      // Priority 2: Location flagged as default in the synced list
+      let pickupLocation = settings.pickupLocations.find(loc => loc.isDefault);
+
+      // Priority 3: Fall back to first available synced location
+      if (!pickupLocation && settings.pickupLocations.length > 0) {
+        console.warn('⚠️  No default pickup location set — using first synced location as fallback.');
+        pickupLocation = settings.pickupLocations[0];
+        // Auto-persist so it is remembered for next order
+        settings.pickupLocations[0].isDefault = true;
+        await settings.save();
+      }
+
+      if (!pickupLocation) {
+        throw new AppError(
+          'No pickup location configured. Open Shiprocket Settings → enter a "Default Pickup Name" (your warehouse name from Shiprocket dashboard) and save.',
+          500
+        );
+      }
+
+      pickupLocationName = pickupLocation.name;
     }
+
+    console.log(`📦 Using pickup location: "${pickupLocationName}"`);
 
     // Prepare order items
     const orderItems = order.items.map(item => ({
-      name: item.productTitle || (item.product && item.product.title) || 'Product',
-      sku: item.sku || (item.product && item.product.sku) || item.product.toString(),
+      name: item.product?.title || 'Product',
+      sku: item.product?.sku || item.product?._id?.toString() || 'SKU',
       units: item.quantity,
       selling_price: item.finalPrice,
       discount: 0,
@@ -176,10 +171,27 @@ class ShiprocketService {
     // Calculate total weight
     const totalWeight = settings.defaultWeight * order.items.reduce((sum, item) => sum + item.quantity, 0);
 
+    // Validate payload
+    const requiredFields = [
+      { key: 'billing_customer_name', val: order.shippingAddress.name },
+      { key: 'billing_address', val: order.shippingAddress.addressLine1 },
+      { key: 'billing_city', val: order.shippingAddress.city },
+      { key: 'billing_pincode', val: order.shippingAddress.pincode },
+      { key: 'billing_state', val: order.shippingAddress.state },
+      { key: 'billing_country', val: 'India' },
+      { key: 'billing_email', val: order.user.email },
+      { key: 'billing_phone', val: order.shippingAddress.phone }
+    ];
+
+    const missingFields = requiredFields.filter(f => !f.val).map(f => f.key);
+    if (missingFields.length > 0) {
+      throw new AppError(`Missing required shipping fields: ${missingFields.join(', ')}`, 400);
+    }
+
     const shiprocketOrderData = {
       order_id: order.orderNo,
       order_date: order.createdAt.toISOString().split('T')[0],
-      pickup_location: pickupLocation.name,
+      pickup_location: pickupLocationName,
       channel_id: settings.channelId || '',
       comment: order.notes || '',
       billing_customer_name: order.shippingAddress.name,
@@ -189,16 +201,16 @@ class ShiprocketService {
       billing_city: order.shippingAddress.city,
       billing_pincode: order.shippingAddress.pincode,
       billing_state: order.shippingAddress.state,
-      billing_country: order.shippingAddress.country,
+      billing_country: 'India',
       billing_email: order.user.email || 'customer@example.com',
       billing_phone: order.shippingAddress.phone,
       shipping_is_billing: true,
       order_items: orderItems,
       payment_method: order.paymentMethod === 'cod' ? 'COD' : 'Prepaid',
-      shipping_charges: order.shippingCost,
+      shipping_charges: order.shippingCost || 0,
       giftwrap_charges: 0,
       transaction_charges: 0,
-      total_discount: order.discount,
+      total_discount: order.discount || 0,
       sub_total: order.subtotal,
       length: settings.defaultLength,
       breadth: settings.defaultBreadth,
@@ -206,13 +218,24 @@ class ShiprocketService {
       weight: totalWeight
     };
 
-    const response = await this.request('POST', '/orders/create/adhoc', shiprocketOrderData);
+    console.log('🚀 Shiprocket Order Payload:', JSON.stringify(shiprocketOrderData, null, 2));
 
-    return {
-      orderId: response.order_id,
-      shipmentId: response.shipment_id,
-      status: response.status
-    };
+    try {
+      const response = await this.request('POST', '/orders/create/adhoc', shiprocketOrderData);
+      console.log('✅ Shiprocket Order Created:', JSON.stringify(response, null, 2));
+
+      return {
+        orderId: response.order_id,
+        shipmentId: response.shipment_id, // Might be undefined if stuck in NEW state
+        status: response.status
+      };
+    } catch (error) {
+      console.error('❌ Shiprocket Create Order Error:', error.response?.data || error.message);
+      // Extract specific error message from Shiprocket response if available
+      const srError = error.response?.data?.message || error.message;
+      const srErrors = error.response?.data?.errors ? JSON.stringify(error.response.data.errors) : '';
+      throw new AppError(`Shiprocket Error: ${srError} ${srErrors}`, error.response?.status || 500);
+    }
   }
 
   /**

@@ -113,7 +113,7 @@ async function handleShipmentStatusUpdate(event) {
 
     if (newOrderStatus === 'shipped') {
       order.shippedAt = new Date();
-      
+
       await notificationService.sendNotification({
         user: order.user,
         type: 'order_shipped',
@@ -130,11 +130,11 @@ async function handleShipmentStatusUpdate(event) {
     } else if (newOrderStatus === 'delivered') {
       order.deliveredAt = new Date();
       order.paymentStatus = 'completed';
-      
+
       // Calculate return window end date
       const returnWindowDays = order.returnWindow || 7;
       order.returnWindowEndDate = new Date(Date.now() + returnWindowDays * 24 * 60 * 60 * 1000);
-      
+
       await notificationService.sendNotification({
         user: order.user,
         type: 'order_delivered',
@@ -305,22 +305,25 @@ async function handleNDRUpdate(event) {
 /**
  * @desc    Razorpay webhook handler
  * @route   POST /api/webhooks/razorpay
- * @access  Public (verified via signature)
- */
-/**
- * @desc    Razorpay webhook handler
- * @route   POST /api/webhooks/razorpay
  * @access  Public
  */
 export const razorpayWebhook = async (req, res) => {
   try {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+      console.error('❌ RAZORPAY_WEBHOOK_SECRET not configured');
+      return res.status(500).json({ error: 'Webhook secret not configured' });
+    }
+
     const signature = req.headers['x-razorpay-signature'];
 
-    // 🔐 Verify signature
+    // ✅ FIX: Parse raw body for signature verification
+    const rawBody = JSON.stringify(req.body);
+
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
-      .update(req.body)
+      .update(rawBody)
       .digest('hex');
 
     if (expectedSignature !== signature) {
@@ -328,25 +331,30 @@ export const razorpayWebhook = async (req, res) => {
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
-    // ✅ Parse event AFTER verification
-    const event = JSON.parse(req.body.toString());
+    const event = req.body;
+    console.log('🔔 Razorpay webhook event:', event.event);
 
-    console.log('📥 Razorpay webhook event:', event.event);
-
-    // ✅ HANDLE EVENTS
+    // ✅ HANDLE PAYMENT CAPTURED
     if (event.event === 'payment.captured') {
       const payment = event.payload.payment.entity;
 
-      // 🔴 THIS WAS YOUR MAIN BUG — FIXED HERE
+      // ✅ FIX: Find order by razorpayOrderId (not razorpayPaymentId)
       const order = await Order.findOne({
         razorpayOrderId: payment.order_id
       });
 
       if (!order) {
         console.error('❌ Order not found for Razorpay order:', payment.order_id);
-        return res.json({ success: true });
+        return res.json({ success: true, message: 'Order not found' });
       }
 
+      // ✅ PREVENT DOUBLE PROCESSING
+      if (order.paymentStatus === 'completed') {
+        console.log('⚠️ Payment already processed for order:', order.orderNo);
+        return res.json({ success: true, message: 'Already processed' });
+      }
+
+      // ✅ UPDATE ORDER STATUS
       order.paymentStatus = 'completed';
       order.razorpayPaymentId = payment.id;
       order.paidAt = new Date();
@@ -356,8 +364,19 @@ export const razorpayWebhook = async (req, res) => {
       await order.save();
 
       console.log(`✅ Payment captured for order ${order.orderNo}`);
+
+      // ✅ SEND NOTIFICATION
+      await notificationService.sendNotification({
+        user: order.user,
+        type: 'payment_success',
+        title: 'Payment Successful',
+        message: `Payment for order ${order.orderNo} has been confirmed.`,
+        referenceId: order._id.toString(),
+        referenceModel: 'Order'
+      });
     }
 
+    // ✅ HANDLE PAYMENT FAILED
     if (event.event === 'payment.failed') {
       const payment = event.payload.payment.entity;
 
@@ -365,11 +384,21 @@ export const razorpayWebhook = async (req, res) => {
         razorpayOrderId: payment.order_id
       });
 
-      if (order) {
+      if (order && order.paymentStatus !== 'failed') {
         order.paymentStatus = 'failed';
+        order.paymentError = payment.error_description || 'Payment failed';
         await order.save();
 
         console.log(`❌ Payment failed for order ${order.orderNo}`);
+
+        await notificationService.sendNotification({
+          user: order.user,
+          type: 'payment_failed',
+          title: 'Payment Failed',
+          message: `Payment for order ${order.orderNo} failed. Please try again.`,
+          referenceId: order._id.toString(),
+          referenceModel: 'Order'
+        });
       }
     }
 
@@ -380,102 +409,7 @@ export const razorpayWebhook = async (req, res) => {
   }
 };
 
-
-/**
- * Handle payment captured
- */
-async function handlePaymentCaptured(event) {
-  const payment = event.payload.payment.entity;
-  
-  // Find order by payment ID
-  const order = await Order.findOne({ 
-    razorpayPaymentId: payment.id 
-  });
-
-  if (order && order.paymentStatus !== 'completed') {
-    order.paymentStatus = 'completed';
-    order.paidAt = new Date();
-    order.orderStatus = 'confirmed';
-    order.confirmedAt = new Date();
-    
-    await order.save();
-
-    await notificationService.sendNotification({
-      user: order.user,
-      type: 'payment_success',
-      title: 'Payment Successful',
-      message: `Payment for order ${order.orderNo} has been confirmed.`,
-      data: {
-        orderNo: order.orderNo,
-        amount: payment.amount / 100 // Convert paise to rupees
-      },
-      referenceId: order._id.toString(),
-      referenceModel: 'Order'
-    });
-
-    console.log(`✅ Payment captured for order ${order.orderNo}`);
-  }
-}
-
-/**
- * Handle payment failed
- */
-async function handlePaymentFailed(event) {
-  const payment = event.payload.payment.entity;
-
-  const order = await Order.findOne({ 
-    razorpayPaymentId: payment.id 
-  });
-
-  if (order) {
-    order.paymentStatus = 'failed';
-    await order.save();
-
-    await notificationService.sendNotification({
-      user: order.user,
-      type: 'payment_failed',
-      title: 'Payment Failed',
-      message: `Payment for order ${order.orderNo} failed. Please try again.`,
-      referenceId: order._id.toString(),
-      referenceModel: 'Order'
-    });
-
-    console.log(`❌ Payment failed for order ${order.orderNo}`);
-  }
-}
-
-/**
- * Handle refund processed
- */
-async function handleRefundProcessed(event) {
-  const refund = event.payload.refund.entity;
-  
-  // Find return request by refund transaction ID
-  const returnRequest = await ReturnRequest.findOne({
-    refundTransactionId: refund.id
-  });
-
-  if (returnRequest && returnRequest.refundStatus !== 'completed') {
-    returnRequest.refundStatus = 'completed';
-    returnRequest.refundedAt = new Date();
-    await returnRequest.save();
-
-    await notificationService.sendNotification({
-      user: returnRequest.user,
-      type: 'refund_completed',
-      title: 'Refund Processed',
-      message: `Your refund of ₹${refund.amount / 100} has been processed.`,
-      referenceId: returnRequest._id.toString(),
-      referenceModel: 'ReturnRequest'
-    });
-
-    console.log(`✅ Refund processed for return ${returnRequest.returnNo}`);
-  }
-}
-
 export default {
   shiprocketWebhook,
   razorpayWebhook
 };
-
-
