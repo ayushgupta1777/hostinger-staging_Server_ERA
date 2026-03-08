@@ -18,23 +18,26 @@ export const sendOTP_MSG91 = async (phone) => {
         const final10Digits = cleanPhone.slice(-10);
         const formattedPhone = `91${final10Digits}`;
 
-        // 1. Generate the OTP explicitly in our backend instead of letting MSG91 blindly generate it.
-        const generatedOtp = String(Math.floor(1000 + Math.random() * 9000)); // 4 Digits
+        // 1. Generate the OTP explicitly
+        const generatedOtp = String(Math.floor(1000 + Math.random() * 9000));
 
-        // 2. We pass `otp=${generatedOtp}` in the URL so MSG91 Registers it for its verification API.
-        const url = `https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID}&mobile=${formattedPhone}&otp=${generatedOtp}&sender=${process.env.MSG91_SENDER_ID}`;
+        const url = `https://control.msg91.com/api/v5/otp`;
 
-        // 3. We pass `OTP` in the JSON body. Your specific template uses `##OTP##` (uppercase).
-        // If this variable is missing from the body, MSG91's template engine fails to render and silently drops the SMS.
+        // Consolidating all parameters into the body for better compatibility with V5 API
         const payload = {
-            OTP: generatedOtp,
-            otp: generatedOtp
+            template_id: process.env.MSG91_TEMPLATE_ID,
+            mobile: formattedPhone,
+            authkey: process.env.MSG91_AUTH_KEY,
+            sender: process.env.MSG91_SENDER_ID,
+            otp: generatedOtp,
+            OTP: generatedOtp, // Custom variable for ##OTP##
+            otp_length: 4,
+            otp_expiry: 15
         };
 
         const response = await axios.post(url, payload, {
             headers: {
-                'authkey': process.env.MSG91_AUTH_KEY,
-                'Content-Type': 'application/JSON'
+                'Content-Type': 'application/json'
             }
         });
 
