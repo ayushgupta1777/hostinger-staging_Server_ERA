@@ -70,20 +70,59 @@ export const updateSettings = async (req, res, next) => {
         isActive: true
       });
     } else {
-      if (email) settings.email = email;
-      if (password) settings.password = password;
-      if (channelId !== undefined) settings.channelId = channelId;
-      if (defaultPickupName !== undefined) settings.defaultPickupName = defaultPickupName;
-      if (autoCreateShipment !== undefined) settings.autoCreateShipment = autoCreateShipment;
-      if (autoFetchTracking !== undefined) settings.autoFetchTracking = autoFetchTracking;
-      if (trackingUpdateInterval) settings.trackingUpdateInterval = trackingUpdateInterval;
-      if (defaultWeight) settings.defaultWeight = defaultWeight;
-      if (defaultLength) settings.defaultLength = defaultLength;
-      if (defaultBreadth) settings.defaultBreadth = defaultBreadth;
-      if (defaultHeight) settings.defaultHeight = defaultHeight;
+      // Deactivate any OTHER rogue documents
+      await ShiprocketSettings.updateMany({ _id: { $ne: settings._id } }, { isActive: false });
 
-      await settings.save();
+      if (email) settings.email = email.trim();
+      if (password) settings.password = password.trim();
     }
+
+    // --- Credential Validation logic ---
+    if (email || password) {
+      try {
+        console.log(`[Shiprocket] Starting credential validation for: ${settings.email}`);
+        const testToken = await shiprocketService.getTokenWithCredentials(
+          settings.email,
+          settings.password
+        );
+
+        if (!testToken) {
+          throw new Error('Shiprocket API did not return an authentication token.');
+        }
+
+        // Success! Reset any cached token to ensure next request uses new credentials
+        shiprocketService.token = null;
+        shiprocketService.tokenExpiresAt = null;
+        settings.token = testToken;
+        settings.tokenExpiresAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+
+      } catch (authError) {
+        console.error(`[Shiprocket] Validation failed for ${settings.email}:`, authError.message);
+
+        let advice = "Please double-check your email and password.";
+        if (authError.message.toLowerCase().includes('401') || authError.message.toLowerCase().includes('403') || authError.message.toLowerCase().includes('forbidden')) {
+          advice = "Invalid credentials. If you are certain they are correct, please ensure Two-Factor Authentication (2FA) is turned OFF on your Shiprocket account.";
+        }
+
+        return next(new AppError(
+          `Shiprocket authentication failed: ${authError.message}. ${advice}`,
+          400
+        ));
+      }
+    }
+    // ------------------------------------
+
+    if (channelId !== undefined) settings.channelId = channelId.trim();
+    if (defaultPickupName !== undefined) settings.defaultPickupName = defaultPickupName.trim();
+    if (autoCreateShipment !== undefined) settings.autoCreateShipment = autoCreateShipment;
+    if (autoFetchTracking !== undefined) settings.autoFetchTracking = autoFetchTracking;
+    if (trackingUpdateInterval) settings.trackingUpdateInterval = trackingUpdateInterval;
+    if (defaultWeight) settings.defaultWeight = defaultWeight;
+    if (defaultLength) settings.defaultLength = defaultLength;
+    if (defaultBreadth) settings.defaultBreadth = defaultBreadth;
+    if (defaultHeight) settings.defaultHeight = defaultHeight;
+
+    await settings.save();
 
     // Don't send password back
     const settingsObj = settings.toObject();
