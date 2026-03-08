@@ -13,8 +13,7 @@ import {
   generateManifest,
   trackShipment,
   cancelShipment,
-  schedulePickup,
-  bulkSyncPendingOrders
+  schedulePickup
 } from '../controllers/shiprocketController.js';
 
 const router = express.Router();
@@ -25,7 +24,6 @@ router.use(protect, authorize('admin', 'vendor'));
 router.get('/settings', getSettings);
 router.put('/settings', updateSettings);
 router.post('/test-connection', testConnection);
-router.post('/bulk-sync', bulkSyncPendingOrders);
 router.get('/pickup-locations', getPickupLocations);
 router.patch('/pickup-locations/:locationId/default', setDefaultPickupLocation);
 

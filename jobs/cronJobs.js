@@ -5,7 +5,6 @@ import WalletTransaction from '../models/WalletTransaction.js';
 import User from '../models/User.js';
 import shiprocketService from '../services/shiprocketService.js';
 import notificationService from '../services/notificationService.js';
-import ShiprocketSettings from '../models/ShiprocketSettings.js';
 
 import OrderStateMachine from '../utils/OrderStateMachine.js';
 
@@ -108,57 +107,6 @@ export const updateTrackingJob = cron.schedule('*/30 * * * *', async () => {
     console.log('✅ Tracking update job completed');
   } catch (error) {
     console.error('❌ Tracking update job failed:', error);
-  }
-});
-
-/**
- * Auto-create shipments for confirmed/processing orders
- * Runs every 15 minutes to clear out any backlog or missed auto-syncs
- */
-export const autoCreateShipmentsJob = cron.schedule('*/15 * * * *', async () => {
-  console.log('🔄 Running auto-create shipments bulk job...');
-
-  try {
-    const settings = await ShiprocketSettings.findOne({ isActive: true });
-
-    if (!settings || !settings.autoCreateShipment) {
-      console.log('⚠️ Auto-create shipments is disabled or not configured');
-      return; // Silently skip if disabled
-    }
-
-    // Find confirmed or processing orders without shipmentId
-    const pendingOrders = await Order.find({
-      orderStatus: { $in: ['confirmed', 'processing'] },
-      $or: [
-        { 'shiprocket.shipmentId': { $exists: false } },
-        { 'shiprocket.shipmentId': null }
-      ]
-    }).populate('user').populate('items.product').limit(50); // Process in batches of 50 to avoid rate limits
-
-    if (pendingOrders.length === 0) {
-      return;
-    }
-
-    console.log(`[Shiprocket Bulk Sync] Found ${pendingOrders.length} orders pending shipment creation`);
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const order of pendingOrders) {
-      try {
-        await shiprocketService.processOrderShipment(order);
-        successCount++;
-        // Sleep briefly to avoid Shiprocket API rate limits
-        await new Promise(resolve => setTimeout(resolve, 350));
-      } catch (err) {
-        console.error(`❌ Auto-create shipment failed for order ${order.orderNo}:`, err.message);
-        failCount++;
-      }
-    }
-
-    console.log(`✅ Auto-create shipments bulk job completed. Success: ${successCount}, Failed: ${failCount}`);
-  } catch (error) {
-    console.error('❌ Auto-create shipments bulk job failed:', error);
   }
 });
 
@@ -293,7 +241,6 @@ export const initializeCronJobs = () => {
 
   creditResellerEarningsJob.start();
   updateTrackingJob.start();
-  autoCreateShipmentsJob.start();
   cleanupCartsJob.start();
   resellerApplicationReminderJob.start();
   cancelUnpaidOrdersJob.start();
@@ -309,7 +256,6 @@ export const stopCronJobs = () => {
 
   creditResellerEarningsJob.stop();
   updateTrackingJob.stop();
-  autoCreateShipmentsJob.stop();
   cleanupCartsJob.stop();
   resellerApplicationReminderJob.stop();
   cancelUnpaidOrdersJob.stop();

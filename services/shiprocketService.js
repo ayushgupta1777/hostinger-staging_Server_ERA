@@ -41,25 +41,33 @@ class ShiprocketService {
 
     // Login to get new token
     try {
-      console.log(`🔐 Authenticating with Shiprocket as: ${settings.email} (Pwd Len: ${settings.password?.length})`);
+      console.log(`[Shiprocket] Attempting login for email: ${settings.email}`);
       const response = await axios.post(`${SHIPROCKET_BASE_URL}/auth/login`, {
         email: settings.email,
         password: settings.password
       });
 
       this.token = response.data.token;
-      // Token expires in 10 days
+      // Token expires in 10 days according to Shiprocket documentation
       this.tokenExpiresAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
 
-      // Save token
+      // Save token to DB to avoid frequent logins
       settings.token = this.token;
       settings.tokenExpiresAt = this.tokenExpiresAt;
       await settings.save();
 
+      console.log(`[Shiprocket] Token successfully refreshed for ${settings.email}`);
       return this.token;
     } catch (error) {
-      console.error('Shiprocket login error:', error.response?.data || error.message);
-      throw new AppError('Failed to authenticate with Shiprocket', 500);
+      const shiprocketError = error.response?.data;
+      console.error('[Shiprocket] Authentication Failure:', {
+        status: error.response?.status,
+        data: shiprocketError,
+        message: error.message
+      });
+
+      const errorMsg = shiprocketError?.message || 'Invalid email and password combination';
+      throw new AppError(`Shiprocket Login Failed: ${errorMsg}`, error.response?.status === 401 ? 401 : 500);
     }
   }
 
@@ -89,9 +97,9 @@ class ShiprocketService {
   }
 
   /**
-   * Make authenticated request to Shiprocket
+   * Make authenticated request to Shiprocket with automatic retry on 401
    */
-  async request(method, endpoint, data = null) {
+  async request(method, endpoint, data = null, retry = true) {
     const token = await this.getToken();
 
     try {
@@ -101,7 +109,8 @@ class ShiprocketService {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000 // 30 second timeout
       };
 
       if (data) {
@@ -111,10 +120,30 @@ class ShiprocketService {
       const response = await axios(config);
       return response.data;
     } catch (error) {
-      console.error('Shiprocket API error:', error.response?.data || error.message);
+      // If unauthorized (401), clear the token locally and in DB, then retry once
+      if (error.response?.status === 401 && retry) {
+        console.warn(`[Shiprocket] Received 401 Unauthorized for ${endpoint}. Clearing token and retrying...`);
+        this.token = null;
+        this.tokenExpiresAt = null;
+
+        try {
+          // Explicitly clear token in DB so other requests don't use the same stale token
+          await ShiprocketSettings.updateOne({ isActive: true }, { $unset: { token: 1, tokenExpiresAt: 1 } });
+        } catch (dbErr) {
+          console.error('[Shiprocket] Database error while clearing token:', dbErr.message);
+        }
+
+        return this.request(method, endpoint, data, false);
+      }
+
+      const status = error.response?.status || 500;
+      const shiprocketMessage = error.response?.data?.message || error.message;
+
+      console.error(`[Shiprocket] API Error [${status}] at [${endpoint}]:`, error.response?.data || error.message);
+
       throw new AppError(
-        error.response?.data?.message || 'Shiprocket API request failed',
-        error.response?.status || 500
+        `Shiprocket API Error: ${shiprocketMessage}`,
+        status
       );
     }
   }
@@ -159,8 +188,8 @@ class ShiprocketService {
 
     // Prepare order items
     const orderItems = order.items.map(item => ({
-      name: item.product?.title || 'Product',
-      sku: item.product?.sku || item.product?._id?.toString() || 'SKU',
+      name: item.productTitle || (item.product && item.product.title) || 'Product',
+      sku: item.sku || (item.product && item.product.sku) || item.product.toString(),
       units: item.quantity,
       selling_price: item.finalPrice,
       discount: 0,
@@ -201,16 +230,16 @@ class ShiprocketService {
       billing_city: order.shippingAddress.city,
       billing_pincode: order.shippingAddress.pincode,
       billing_state: order.shippingAddress.state,
-      billing_country: 'India',
+      billing_country: order.shippingAddress.country,
       billing_email: order.user.email || 'customer@example.com',
       billing_phone: order.shippingAddress.phone,
       shipping_is_billing: true,
       order_items: orderItems,
       payment_method: order.paymentMethod === 'cod' ? 'COD' : 'Prepaid',
-      shipping_charges: order.shippingCost || 0,
+      shipping_charges: order.shippingCost,
       giftwrap_charges: 0,
       transaction_charges: 0,
-      total_discount: order.discount || 0,
+      total_discount: order.discount,
       sub_total: order.subtotal,
       length: settings.defaultLength,
       breadth: settings.defaultBreadth,
@@ -407,87 +436,6 @@ class ShiprocketService {
     const crypto = require('crypto');
     const hash = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
     return hash === signature;
-  }
-
-  /**
-   * Complete end-to-end shipment process for an Order document
-   * Used for auto-sync and bulk sync tasks
-   */
-  async processOrderShipment(order) {
-    if (!order) throw new AppError('Order not found', 404);
-    if (order.shiprocket && order.shiprocket.shipmentId) {
-      console.log(`[Shiprocket] Shipment already exists for order ${order.orderNo}`);
-      return { success: true, message: 'Already created' };
-    }
-
-    // Auto-sync pickup locations if empty
-    const settings = await ShiprocketSettings.findOne({ isActive: true });
-    if (!settings) throw new AppError('Shiprocket settings not configured', 500);
-
-    if (!settings.pickupLocations || settings.pickupLocations.length === 0) {
-      try {
-        const locations = await this.getPickupLocations();
-        if (locations && locations.length > 0) {
-          settings.pickupLocations = locations.map((loc, index) => ({
-            id: loc.id,
-            name: loc.pickup_location,
-            phone: loc.phone,
-            email: loc.email,
-            address: loc.address,
-            city: loc.city,
-            state: loc.state,
-            pincode: loc.pin_code,
-            isDefault: index === 0
-          }));
-          await settings.save();
-        }
-      } catch (syncError) {
-        console.error('[Shiprocket] Failed to auto-sync pickup locations:', syncError.message);
-      }
-    }
-
-    // 1. Create shipment
-    const result = await this.createOrder(order);
-
-    order.shiprocket = {
-      orderId: result.orderId,
-      shipmentId: result.shipmentId
-    };
-
-    // 2. Generate AWB
-    try {
-      const awbResult = await this.generateAWB(result.shipmentId);
-      order.shiprocket.awb = awbResult.awb;
-      order.shiprocket.courierName = awbResult.courierName;
-      order.trackingNumber = awbResult.awb;
-      order.courierName = awbResult.courierName;
-
-      // Auto upgrade status to shipped
-      order.orderStatus = 'shipped';
-      if (!order.statusHistory) order.statusHistory = [];
-      order.statusHistory.push({
-        from: 'processing',
-        to: 'shipped',
-        changedAt: new Date(),
-        reason: 'Automated Shiprocket Sync'
-      });
-      order.shippedAt = new Date();
-    } catch (err) {
-      console.error(`[Shiprocket] Failed to generate AWB for ${order.orderNo}:`, err.message);
-    }
-
-    // 3. Schedule pickup
-    if (order.shiprocket.shipmentId) {
-      try {
-        const pickupResult = await this.schedulePickup(result.shipmentId);
-        order.shiprocket.pickupScheduledDate = pickupResult.pickupScheduledDate;
-      } catch (err) {
-        console.error(`[Shiprocket] Failed to schedule pickup for ${order.orderNo}:`, err.message);
-      }
-    }
-
-    await order.save();
-    return { success: true, order };
   }
 }
 

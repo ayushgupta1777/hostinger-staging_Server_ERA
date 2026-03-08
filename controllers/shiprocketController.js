@@ -17,13 +17,17 @@ export const getSettings = async (req, res, next) => {
     let settings = await ShiprocketSettings.findOne({ isActive: true });
 
     if (!settings) {
-      settings = await ShiprocketSettings.create({
-        email: '',
-        password: '',
-        isActive: false,
-        pickupLocations: [],
-        autoCreateShipment: true,
-        autoFetchTracking: true
+      return res.json({
+        success: true,
+        data: {
+          settings: {
+            email: '',
+            isActive: false,
+            pickupLocations: [],
+            autoCreateShipment: true,
+            autoFetchTracking: true
+          }
+        }
       });
     }
 
@@ -61,16 +65,21 @@ export const updateSettings = async (req, res, next) => {
       defaultHeight
     } = req.body;
 
+    // --- Settings Unification Logic ---
+    // Ensure only one active settings document exists to prevent configuration conflicts
     let settings = await ShiprocketSettings.findOne({ isActive: true });
 
     if (!settings) {
-      settings = await ShiprocketSettings.create({
-        email,
-        password,
+      // Deactivate any rogue settings documents that might exist
+      await ShiprocketSettings.updateMany({}, { isActive: false });
+
+      settings = new ShiprocketSettings({
+        email: (email || '').trim(),
+        password: (password || '').trim(),
         isActive: true
       });
     } else {
-      // Deactivate any OTHER rogue documents
+      // Deactivate any OTHER documents just to be safe (Clean up duplicates)
       await ShiprocketSettings.updateMany({ _id: { $ne: settings._id } }, { isActive: false });
 
       if (email) settings.email = email.trim();
@@ -100,7 +109,7 @@ export const updateSettings = async (req, res, next) => {
         console.error(`[Shiprocket] Validation failed for ${settings.email}:`, authError.message);
 
         let advice = "Please double-check your email and password.";
-        if (authError.message.toLowerCase().includes('401') || authError.message.toLowerCase().includes('403') || authError.message.toLowerCase().includes('forbidden')) {
+        if (authError.message.toLowerCase().includes('401') || authError.message.toLowerCase().includes('forbidden')) {
           advice = "Invalid credentials. If you are certain they are correct, please ensure Two-Factor Authentication (2FA) is turned OFF on your Shiprocket account.";
         }
 
@@ -112,7 +121,7 @@ export const updateSettings = async (req, res, next) => {
     }
     // ------------------------------------
 
-    if (channelId !== undefined) settings.channelId = channelId.trim();
+    if (channelId) settings.channelId = channelId.trim();
     if (defaultPickupName !== undefined) settings.defaultPickupName = defaultPickupName.trim();
     if (autoCreateShipment !== undefined) settings.autoCreateShipment = autoCreateShipment;
     if (autoFetchTracking !== undefined) settings.autoFetchTracking = autoFetchTracking;
@@ -172,34 +181,26 @@ export const getPickupLocations = async (req, res, next) => {
     // Save locations to settings
     const settings = await ShiprocketSettings.findOne({ isActive: true });
     if (settings) {
-      // Check if there is already a saved default we want to preserve
-      const existingDefault = settings.pickupLocations.find(l => l.isDefault);
+      const existingDefaultId = settings.pickupLocations.find(l => l.isDefault)?.id;
 
       settings.pickupLocations = locations.map((loc, index) => ({
-        id: String(loc.id),
+        id: loc.id,
         name: loc.pickup_location,
         phone: loc.phone,
         email: loc.email,
         address: loc.address,
-        address_2: loc.address_2 || '',
         city: loc.city,
         state: loc.state,
         pincode: loc.pin_code,
-        // Keep previously chosen default by matching id; otherwise first location is default
-        isDefault: existingDefault
-          ? String(loc.id) === existingDefault.id
-          : index === 0
+        // Preserve existing default or set first one as default if none exists
+        isDefault: existingDefaultId ? (loc.id === existingDefaultId) : (index === 0)
       }));
-
       await settings.save();
-      console.log(`✅ Synced ${locations.length} pickup location(s). Default: ${settings.pickupLocations.find(l => l.isDefault)?.name || 'none'}`);
     }
 
     res.json({
       success: true,
-      data: {
-        locations: settings ? settings.pickupLocations : locations
-      }
+      data: { locations }
     });
   } catch (error) {
     next(error);
@@ -225,7 +226,30 @@ export const createShipment = async (req, res, next) => {
       return next(new AppError('Shipment already created for this order', 400));
     }
 
-
+    // Auto-sync pickup locations if empty
+    const settings = await ShiprocketSettings.findOne({ isActive: true });
+    if (settings && (!settings.pickupLocations || settings.pickupLocations.length === 0)) {
+      try {
+        const locations = await shiprocketService.getPickupLocations();
+        if (locations && locations.length > 0) {
+          settings.pickupLocations = locations.map((loc, index) => ({
+            id: loc.id,
+            name: loc.pickup_location,
+            phone: loc.phone,
+            email: loc.email,
+            address: loc.address,
+            city: loc.city,
+            state: loc.state,
+            pincode: loc.pin_code,
+            isDefault: index === 0
+          }));
+          await settings.save();
+        }
+      } catch (syncError) {
+        console.error('Failed to auto-sync pickup locations:', syncError.message);
+        // Continue anyway, createOrder will throw the appropriate error if still missing
+      }
+    }
 
     // Create shipment
     const result = await shiprocketService.createOrder(order);
@@ -261,7 +285,7 @@ export const createShipment = async (req, res, next) => {
 
     res.json({
       success: true,
-      message: 'Shipment created and AWB generated successfully',
+      message: 'Shipment created successfully',
       data: { order }
     });
   } catch (error) {
@@ -433,18 +457,12 @@ export const schedulePickup = async (req, res, next) => {
 export const setDefaultPickupLocation = async (req, res, next) => {
   try {
     const { locationId } = req.params;
-
     const settings = await ShiprocketSettings.findOne({ isActive: true });
+
     if (!settings) {
       return next(new AppError('Shiprocket settings not found', 404));
     }
 
-    const locationExists = settings.pickupLocations.some(loc => loc.id === locationId);
-    if (!locationExists) {
-      return next(new AppError('Pickup location not found. Please sync locations first.', 404));
-    }
-
-    // Mark only the chosen one as default
     settings.pickupLocations = settings.pickupLocations.map(loc => ({
       ...loc.toObject(),
       isDefault: loc.id === locationId
@@ -452,66 +470,10 @@ export const setDefaultPickupLocation = async (req, res, next) => {
 
     await settings.save();
 
-    const chosen = settings.pickupLocations.find(l => l.isDefault);
-    console.log(`✅ Default pickup location set to: ${chosen?.name}`);
-
     res.json({
       success: true,
-      message: `"${chosen?.name}" is now the default pickup location`,
-      data: { pickupLocations: settings.pickupLocations }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Bulk sync pending orders
- * @route   POST /api/shiprocket/bulk-sync
- * @access  Private (Admin)
- */
-export const bulkSyncPendingOrders = async (req, res, next) => {
-  try {
-    const settings = await ShiprocketSettings.findOne({ isActive: true });
-
-    if (!settings) {
-      return next(new AppError('Shiprocket settings not configured', 400));
-    }
-
-    // Find confirmed or processing orders without shipmentId
-    const pendingOrders = await Order.find({
-      orderStatus: { $in: ['confirmed', 'processing'] },
-      $or: [
-        { 'shiprocket.shipmentId': { $exists: false } },
-        { 'shiprocket.shipmentId': null }
-      ]
-    }).populate('user').populate('items.product').limit(100); // 100 max per invoke manually
-
-    if (pendingOrders.length === 0) {
-      return res.json({
-        success: true,
-        message: 'No pending orders found to sync.'
-      });
-    }
-
-    // Process asynchronously so we don't block the request
-    setTimeout(async () => {
-      console.log(`[Shiprocket Manual Bulk Sync] Started processing ${pendingOrders.length} orders...`);
-      for (const order of pendingOrders) {
-        try {
-          await shiprocketService.processOrderShipment(order);
-          // Standard delay to avoid API rate limits
-          await new Promise(resolve => setTimeout(resolve, 350));
-        } catch (err) {
-          console.error(`[Bulk Sync] Failed for order ${order.orderNo}:`, err.message);
-        }
-      }
-      console.log(`[Shiprocket Manual Bulk Sync] Completed.`);
-    }, 0);
-
-    res.json({
-      success: true,
-      message: `Bulk sync started for ${pendingOrders.length} pending orders. This process will complete in the background.`
+      message: 'Default pickup location updated',
+      data: { settings }
     });
   } catch (error) {
     next(error);

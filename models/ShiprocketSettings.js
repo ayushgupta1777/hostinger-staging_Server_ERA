@@ -14,7 +14,7 @@ const shiprocketSettingsSchema = new mongoose.Schema({
   // This is used directly in order creation - no API sync needed
   defaultPickupName: { type: String, default: '' },
 
-  // Pickup Locations (synced from Shiprocket API)
+  // Pickup Locations
   pickupLocations: [{
     id: String,
     name: String,
