@@ -22,11 +22,7 @@ export const sendOTP_2Factor = async (phone, otp) => {
 
         // 2Factor API Format with Template: https://2factor.in/API/V1/{APIKEY}/SMS/{PHONE}/{OTP}/{TEMPLATE}
         const templateName = process.env.TWO_FACTOR_TEMPLATE_NAME;
-        let url = `https://2factor.in/API/V1/${apiKey}/SMS/${cleanPhone}/${otp}`;
-
-        if (templateName && templateName !== 'YOUR_TEMPLATE_NAME' && templateName !== 'undefined') {
-            url += `/${templateName}`;
-        }
+        let url = `https://2factor.in/API/V1/${apiKey}/SMS/${cleanPhone}/${otp}/${templateName}`;
 
         console.log(`[otpService] Calling 2Factor API: ${url.replace(apiKey, 'HIDDEN_KEY')}`);
         const response = await axios.get(url);
