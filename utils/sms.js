@@ -26,11 +26,11 @@ export const sendOTP_2Factor = async (phone, otp) => {
 
         // 2Factor API Format with Template: https://2factor.in/API/V1/{APIKEY}/SMS/{PHONE}/{OTP}/{TEMPLATE}
         const templateName = process.env.TWO_FACTOR_TEMPLATE_NAME;
-        let url = `https://2factor.in/API/V1/${apiKey}/SMS/${cleanPhone}/${otp}`;
+        let url = `https://2factor.in/API/V1/${apiKey}/SMS/${cleanPhone}/${otp}/${templateName}`;
 
-        if (templateName && templateName !== 'YOUR_TEMPLATE_NAME' && templateName !== 'undefined') {
-            url += `/${templateName}`;
-        }
+        // if (templateName && templateName !== 'YOUR_TEMPLATE_NAME' && templateName !== 'undefined') {
+        //     url += `/${templateName}`;
+        // }
 
         console.log(`[sms.js] Sending 2Factor request to: ${url.replace(apiKey, 'HIDDEN_KEY')}`);
 
