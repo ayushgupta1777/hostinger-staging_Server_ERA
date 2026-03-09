@@ -6,7 +6,7 @@ import Wallet from '../models/Wallet.js';
 import OTP from '../models/OTP.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateReferralCode } from '../utils/helpers.js';
-import { sendOTP_MSG91, verifyOTP_MSG91 } from '../utils/sms.js';
+import { sendOTP_2Factor } from '../utils/sms.js';
 
 /**
  * Generate JWT token
@@ -30,28 +30,33 @@ export const sendOTP = async (req, res, next) => {
       return next(new AppError('Phone number is required', 400));
     }
 
-    // With MSG91, we don't need to generate or store the actual OTP string
-    // MSG91 handles code generation and verification.
-    // We just store a placeholder to track that a verification is pending.
-    const expiresAt = new Date(Date.now() + (parseInt(process.env.OTP_EXPIRE_MINUTES) || 10) * 60000);
+    // Generate random OTP based on OTP_LENGTH from env or default to 4 digits
+    const otpLength = parseInt(process.env.OTP_LENGTH) || 4;
+    const min = Math.pow(10, otpLength - 1);
+    const max = Math.pow(10, otpLength) - 1;
+    const otp = String(Math.floor(min + Math.random() * (max - min + 1)));
 
-    // Save/Update "verification pending" state in database
+    // Use OTP_EXPIRY from env (in seconds) or default to 900 (15 mins)
+    const otpExpirySeconds = parseInt(process.env.OTP_EXPIRY) || 900;
+    const expiresAt = new Date(Date.now() + otpExpirySeconds * 1000);
+
+    // Save/Update OTP in database
     await OTP.findOneAndUpdate(
       { phone },
-      { otp: 'MSG91', type: type || 'verification', expiresAt, verified: false },
+      { otp, type: type || 'verification', expiresAt, verified: false },
       { upsert: true, new: true }
     );
 
-    // Send via MSG91
-    const smsResult = await sendOTP_MSG91(phone);
+    // Send via 2Factor
+    const smsResult = await sendOTP_2Factor(phone, otp);
 
     if (!smsResult.success) {
-      return next(new AppError(`Failed to send OTP via MSG91: ${smsResult.message}`, 500));
+      return next(new AppError(`Failed to send OTP via 2Factor: ${smsResult.message}`, 500));
     }
 
     res.json({
       success: true,
-      message: 'OTP sent successfully via MSG91',
+      message: 'OTP sent successfully via 2Factor',
     });
   } catch (error) {
     next(error);
@@ -67,27 +72,30 @@ export const verifyOTP = async (req, res, next) => {
   try {
     const { phone, otp } = req.body;
 
-    // Ask MSG91 if the OTP is correct
-    const verificationResult = await verifyOTP_MSG91(phone, otp);
-
-    if (!verificationResult.success) {
-      return next(new AppError(verificationResult.message || 'Invalid OTP', 400));
+    if (!phone || !otp) {
+      return next(new AppError('Phone and OTP are required', 400));
     }
 
-    // If MSG91 approves, update the local DB record so /register knows we are valid
+    // Find OTP record
     const otpRecord = await OTP.findOne({ phone });
 
-    if (otpRecord) {
-      if (otpRecord.expiresAt < new Date()) {
-        return next(new AppError('OTP verification period expired', 400));
-      }
-      otpRecord.verified = true;
-      await otpRecord.save();
-    } else {
-      // Edge case: MSG91 confirms it but no local tracking object was created? Let's just create a verified local footprint.
-      const expiresAt = new Date(Date.now() + 10 * 60000);
-      await OTP.create({ phone, otp: 'MSG91', type: 'verification', expiresAt, verified: true });
+    if (!otpRecord) {
+      return next(new AppError('No OTP request found for this phone number', 404));
     }
+
+    // Check if OTP matches
+    if (otpRecord.otp !== otp) {
+      return next(new AppError('Invalid OTP', 400));
+    }
+
+    // Check if expired
+    if (otpRecord.expiresAt < new Date()) {
+      return next(new AppError('OTP has expired', 400));
+    }
+
+    // Mark as verified
+    otpRecord.verified = true;
+    await otpRecord.save();
 
     // Check if user already exists
     const user = await User.findOne({ phone });
@@ -95,6 +103,10 @@ export const verifyOTP = async (req, res, next) => {
     if (user) {
       // If user exists, provide token (auto-login)
       const token = generateToken(user._id);
+
+      // Cleanup OTP record after successful login
+      await OTP.deleteOne({ phone });
+
       return res.json({
         success: true,
         message: 'OTP verified and logged in',
@@ -200,14 +212,22 @@ export const login = async (req, res, next) => {
 
     // Option 1: Phone + OTP Login
     if (otp) {
-      // Directly ask MSG91 if the OTP is accurate
-      const verificationResult = await verifyOTP_MSG91(phone, otp);
-
-      if (!verificationResult.success) {
-        return next(new AppError(verificationResult.message || 'Invalid or expired OTP', 401));
+      if (!phone) {
+        return next(new AppError('Phone number is required for OTP login', 400));
       }
 
-      // Cleanup local verification record if it exists
+      // Check local DB for OTP
+      const otpRecord = await OTP.findOne({ phone });
+
+      if (!otpRecord || otpRecord.otp !== otp) {
+        return next(new AppError('Invalid OTP', 401));
+      }
+
+      if (otpRecord.expiresAt < new Date()) {
+        return next(new AppError('OTP has expired', 401));
+      }
+
+      // Cleanup local verification record
       await OTP.deleteOne({ phone });
 
       user = await User.findOne({ phone });

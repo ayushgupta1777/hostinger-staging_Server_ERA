@@ -2,7 +2,7 @@ import axios from 'axios';
 
 /**
  * Send OTP via 2Factor API
- * @param {string} phone - Target phone number
+ * @param {string} phone - Target phone number (10 digits)
  * @param {string} otp - The OTP to send
  * @returns {Promise<{success: boolean, message?: string}>}
  */
