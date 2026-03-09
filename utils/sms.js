@@ -13,28 +13,35 @@ export const sendOTP_2Factor = async (phone, otp) => {
             return { success: false, message: '2Factor API key is missing or not configured' };
         }
 
-        // Clean phone number to 10 digits
-        const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+        // Clean phone number: Remove all non-digits.
+        let cleanPhone = String(phone).replace(/\D/g, '');
+
+        // If it's 10 digits, 2Factor usually assumes India (91). 
+        // We'll log what we are sending for clarity.
+        if (cleanPhone.length === 10) {
+            console.log(`[sms.js] 10-digit number detected: ${cleanPhone}. 2Factor will likely prepend 91.`);
+        } else if (cleanPhone.length > 10) {
+            console.log(`[sms.js] Longer number detected: ${cleanPhone}. Using as is.`);
+        }
 
         // 2Factor API Format with Template: https://2factor.in/API/V1/{APIKEY}/SMS/{PHONE}/{OTP}/{TEMPLATE}
         const templateName = process.env.TWO_FACTOR_TEMPLATE_NAME;
         let url = `https://2factor.in/API/V1/${apiKey}/SMS/${cleanPhone}/${otp}`;
 
-        if (templateName && templateName !== 'YOUR_TEMPLATE_NAME') {
+        if (templateName && templateName !== 'YOUR_TEMPLATE_NAME' && templateName !== 'undefined') {
             url += `/${templateName}`;
         }
 
-        console.log(`Sending 2Factor OTP to ${cleanPhone} with Template: ${templateName || 'DEFAULT'}`);
-        console.log(`URL: https://2factor.in/API/V1/${apiKey}/SMS/${cleanPhone}/${otp}/${templateName || ''}`);
+        console.log(`[sms.js] Sending 2Factor request to: ${url.replace(apiKey, 'HIDDEN_KEY')}`);
 
         const response = await axios.get(url);
 
-        console.log('2Factor Detail Response:', JSON.stringify(response.data, null, 2));
+        console.log('[sms.js] 2Factor Response:', response.data);
 
         if (response.data && response.data.Status === 'Success') {
-            return { success: true, message: 'OTP sent successfully via 2Factor' };
+            return { success: true, message: 'OTP sent successfully via 2Factor', sessionId: response.data.Details };
         } else {
-            console.error('2Factor Error Response:', response.data);
+            console.error('[sms.js] 2Factor Error Response:', response.data);
             return { success: false, message: response.data.Details || 'Failed to send OTP via 2Factor' };
         }
     } catch (error) {
