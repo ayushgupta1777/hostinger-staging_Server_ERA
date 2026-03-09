@@ -24,7 +24,10 @@ export const sendOTP_2Factor = async (phone, otp) => {
             url += `/${templateName}`;
         }
 
+        console.log(`[otpService] Sending 2Factor OTP to ${cleanPhone} with Template: ${templateName || 'DEFAULT'}`);
         const response = await axios.get(url);
+
+        console.log('[otpService] 2Factor Detail Response:', JSON.stringify(response.data, null, 2));
 
         if (response.data && response.data.Status === 'Success') {
             return { success: true, message: 'OTP sent successfully via 2Factor' };

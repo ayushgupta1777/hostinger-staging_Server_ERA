@@ -1,19 +1,23 @@
 import dotenv from 'dotenv';
 import { sendOTP_2Factor } from './utils/sms.js';
 
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const test2Factor = async () => {
-    const testPhone = '9999999999'; // Replace with a real number for manual test if needed
+    const testPhone = process.env.TEST_PHONE || '9999999999';
     const testOtp = '1234';
 
-    console.log('Testing 2Factor OTP Send...');
+    console.log('--- 2Factor API Test ---');
     console.log('Phone:', testPhone);
     console.log('OTP:', testOtp);
-    console.log('API Key:', process.env.TWO_FACTOR_API_KEY ? 'Present' : 'Missing');
+    console.log('Template:', process.env.TWO_FACTOR_TEMPLATE_NAME);
 
     const result = await sendOTP_2Factor(testPhone, testOtp);
-    console.log('Result:', result);
+    console.log('Final Result:', result);
 };
 
 test2Factor();
