@@ -8,9 +8,6 @@ import {
   getMe,
   updateProfile,
   changePassword,
-  sendOTP,
-  resendOTP,
-  verifyOTP,
   logout
 } from '../controllers/authController.js';
 import { protect } from '../middleware/auth.js';
@@ -27,9 +24,6 @@ router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
 router.put('/password', protect, changePassword);
-router.post('/send-otp', sendOTP);
-router.post('/resend-otp', resendOTP);
-router.post('/verify-otp', verifyOTP);
 
 /**
  * @desc    Upload user avatar

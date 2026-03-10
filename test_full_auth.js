@@ -1,40 +1,45 @@
 import axios from 'axios';
 
-const phone = '9876543210';
+const testAuth = async () => {
+  const baseURL = 'http://localhost:5000/api/auth';
+  
+  try {
+    console.log('--- Testing /register ---');
+    const registerData = {
+      name: 'Test Google User',
+      email: 'testgoogle123@google.com',
+      googleId: '1234567890abcdef',
+      profileImage: 'http://example.com/avatar.jpg',
+      phoneNumber: '9999999999',
+      password: 'password123',
+      role: 'customer'
+    };
+    const regRes = await axios.post(`${baseURL}/register`, registerData);
+    console.log('Register Response:', regRes.data);
 
-const testFullFlow = async () => {
-    try {
-        // 1. Request OTP
-        console.log('Sending OTP...');
-        const sendResponse = await axios.post('http://localhost:5000/api/auth/send-otp', {
-            phone,
-            type: 'signup'
-        });
-        const otp = sendResponse.data.otp;
-        console.log('Got OTP:', otp);
+    console.log('\n--- Testing /login with Google ID ---');
+    const loginGoogleData = {
+      email: 'testgoogle123@google.com',
+      googleId: '1234567890abcdef'
+    };
+    const loginRes = await axios.post(`${baseURL}/login`, loginGoogleData);
+    console.log('Login (Google) Response:', loginRes.data);
 
-        // 2. Verify OTP
-        console.log('Verifying OTP...');
-        const verifyResponse = await axios.post('http://localhost:5000/api/auth/verify-otp', {
-            phone,
-            otp
-        });
-        console.log('Verify Response:', JSON.stringify(verifyResponse.data, null, 2));
+    console.log('\n--- Testing /login with Password ---');
+    const loginPassData = {
+      email: 'testgoogle123@google.com',
+      password: 'password123'
+    };
+    const loginPassRes = await axios.post(`${baseURL}/login`, loginPassData);
+    console.log('Login (Password) Response:', loginPassRes.data);
 
-        // 3. Register
-        console.log('Registering...');
-        const registerResponse = await axios.post('http://localhost:5000/api/auth/register', {
-            name: 'Test User',
-            email: `test_${Date.now()}@example.com`,
-            password: 'password123',
-            phone,
-            role: 'customer'
-        });
-        console.log('Register Response:', JSON.stringify(registerResponse.data, null, 2));
-
-    } catch (error) {
-        console.error('Error:', error.response?.data || error.message);
+  } catch (err) {
+    if (err.response) {
+      console.error('Error:', err.response.data);
+    } else {
+      console.error('Error:', err.message);
     }
+  }
 };
 
-testFullFlow();
+testAuth();

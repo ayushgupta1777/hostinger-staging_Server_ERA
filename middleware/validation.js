@@ -22,6 +22,8 @@ export const registerValidation = [
   body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('phone').optional().isLength({ min: 10, max: 15 }).withMessage('Valid phone number is required'),
   body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('googleId').optional().isString().withMessage('invalid google ID'),
+  body('profileImage').optional().isString().withMessage('invalid profile image URL'),
   body('role').optional().isIn(['customer', 'vendor', 'reseller']).withMessage('Invalid role')
 ];
 
@@ -30,9 +32,8 @@ export const registerValidation = [
  */
 export const loginValidation = [
   body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('phone').optional().isLength({ min: 10, max: 15 }).withMessage('Valid phone number is required'),
+  body('googleId').optional().isString().withMessage('Google ID must be a string'),
   body('password').optional().notEmpty().withMessage('Password is required'),
-  body('otp').optional().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
 ];
 
 /**

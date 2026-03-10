@@ -19,9 +19,13 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    unique: true,
     sparse: true,
     trim: true
+  },
+  googleId: {
+    type: String,
+    sparse: true,
+    unique: true
   },
   password: {
     type: String,
@@ -51,6 +55,7 @@ const userSchema = new mongoose.Schema({
   },
 
   avatar: String,
+  profileImage: String,
   emailVerified: {
     type: Boolean,
     default: false
