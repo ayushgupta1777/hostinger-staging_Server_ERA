@@ -30,6 +30,11 @@ export const sendOTP = async (req, res, next) => {
       return next(new AppError('Phone number is required', 400));
     }
 
+    // Validate phone number format (Indian 10-digit)
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      return next(new AppError('Invalid phone number format. Please provide a 10-digit number.', 400));
+    }
+
     // Generate random OTP based on OTP_LENGTH from env or default to 4 digits
     const otpLength = parseInt(process.env.OTP_LENGTH) || 4;
     const min = Math.pow(10, otpLength - 1);
@@ -57,6 +62,62 @@ export const sendOTP = async (req, res, next) => {
     res.json({
       success: true,
       message: 'OTP sent successfully via 2Factor',
+      sessionId: smsResult.sessionId
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Resend OTP
+ * @route   POST /api/auth/resend-otp
+ * @access  Public
+ */
+export const resendOTP = async (req, res, next) => {
+  try {
+    const { phone, type } = req.body;
+
+    if (!phone) {
+      return next(new AppError('Phone number is required', 400));
+    }
+
+    // Check if there is an existing OTP that is not yet expired
+    const existingOTP = await OTP.findOne({ phone });
+
+    // If an OTP was sent very recently (less than 1 minute ago), rate limit it
+    if (existingOTP && (Date.now() - existingOTP.updatedAt < 60000)) {
+      const waitTime = Math.ceil((60000 - (Date.now() - existingOTP.updatedAt)) / 1000);
+      return next(new AppError(`Please wait ${waitTime} seconds before requesting a new OTP`, 429));
+    }
+
+    // Generate new OTP
+    const otpLength = parseInt(process.env.OTP_LENGTH) || 4;
+    const min = Math.pow(10, otpLength - 1);
+    const max = Math.pow(10, otpLength) - 1;
+    const otp = String(Math.floor(min + Math.random() * (max - min + 1)));
+
+    const otpExpirySeconds = parseInt(process.env.OTP_EXPIRY) || 900;
+    const expiresAt = new Date(Date.now() + otpExpirySeconds * 1000);
+
+    // Update OTP in database
+    await OTP.findOneAndUpdate(
+      { phone },
+      { otp, type: type || 'verification', expiresAt, verified: false },
+      { upsert: true, new: true }
+    );
+
+    // Send via 2Factor
+    const smsResult = await sendOTP_2Factor(phone, otp);
+
+    if (!smsResult.success) {
+      return next(new AppError(`Failed to resend OTP via 2Factor: ${smsResult.message}`, 500));
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP resent successfully via 2Factor',
+      sessionId: smsResult.sessionId
     });
   } catch (error) {
     next(error);

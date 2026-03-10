@@ -13,15 +13,12 @@ export const sendOTP_2Factor = async (phone, otp) => {
             return { success: false, message: '2Factor API key is missing or not configured' };
         }
 
-        // Clean phone number: Remove all non-digits.
+        // Clean phone number: Strictly 10 digits as per your working example
+        // (Removing any country code if present to see if it helps)
         let cleanPhone = String(phone).replace(/\D/g, '');
-
-        // If it's 10 digits, 2Factor usually assumes India (91). 
-        // We'll log what we are sending for clarity.
-        if (cleanPhone.length === 10) {
-            console.log(`[sms.js] 10-digit number detected: ${cleanPhone}. 2Factor will likely prepend 91.`);
-        } else if (cleanPhone.length > 10) {
-            console.log(`[sms.js] Longer number detected: ${cleanPhone}. Using as is.`);
+        if (cleanPhone.length > 10) {
+            cleanPhone = cleanPhone.slice(-10);
+            console.log(`[sms.js] Sliced to 10 digits: ${cleanPhone}`);
         }
 
         // 2Factor API Format with Template: https://2factor.in/API/V1/{APIKEY}/SMS/{PHONE}/{OTP}/{TEMPLATE}
