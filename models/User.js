@@ -54,6 +54,14 @@ const userSchema = new mongoose.Schema({
     ifscCode: String
   },
 
+  paymentMethods: {
+    upiId: { type: String, trim: true },
+    bankName: { type: String, trim: true },
+    accountHolderName: { type: String, trim: true },
+    accountNumber: { type: String, trim: true },
+    ifscCode: { type: String, trim: true }
+  },
+
   avatar: String,
   profileImage: String,
   emailVerified: {

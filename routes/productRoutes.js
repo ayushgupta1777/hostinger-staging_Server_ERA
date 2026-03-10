@@ -6,6 +6,7 @@ import express from 'express';
 import {
   getProducts,
   getProduct,
+  getFeaturedProducts,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -20,6 +21,7 @@ const router = express.Router();
 
 // Public routes
 router.get('/', getProducts);
+router.get('/featured', getFeaturedProducts);
 router.get('/:id', getProduct);
 router.get('/categories/:parentId/subcategories', getSubcategoriesByParent);
 

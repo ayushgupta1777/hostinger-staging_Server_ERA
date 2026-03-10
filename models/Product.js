@@ -105,6 +105,10 @@ const productSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isFeatured: {
+    type: Boolean,
+    default: false
+  },
   // SEO
   seoTitle: String,
   seoDescription: String,

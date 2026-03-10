@@ -391,3 +391,24 @@ export const getSubcategoriesByParent = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * @desc    Get featured products
+ * @route   GET /api/products/featured
+ * @access  Public
+ */
+export const getFeaturedProducts = async (req, res, next) => {
+  try {
+    const products = await Product.find({ isFeatured: true, status: 'approved', isActive: true })
+      .populate('category', 'name slug image')
+      .populate('vendor', 'storeName')
+      .limit(5);
+
+    res.json({
+      success: true,
+      data: { products }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

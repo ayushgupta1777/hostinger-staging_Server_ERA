@@ -51,6 +51,13 @@ export const getAllProducts = async (req, res, next) => {
 
 export const createProduct = async (req, res, next) => {
   try {
+    if (req.body.isFeatured) {
+      const featuredCount = await Product.countDocuments({ isFeatured: true });
+      if (featuredCount >= 5) {
+        return next(new AppError('Maximum of 5 featured products allowed', 400));
+      }
+    }
+
     const sku = req.body.sku || `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     const product = await Product.create({
@@ -71,6 +78,16 @@ export const createProduct = async (req, res, next) => {
 
 export const updateProduct = async (req, res, next) => {
   try {
+    if (req.body.isFeatured) {
+      const existingProduct = await Product.findById(req.params.id);
+      if (existingProduct && !existingProduct.isFeatured) {
+        const featuredCount = await Product.countDocuments({ isFeatured: true });
+        if (featuredCount >= 5) {
+          return next(new AppError('Maximum of 5 featured products allowed', 400));
+        }
+      }
+    }
+
     const product = await Product.findByIdAndUpdate(
       req.params.id,
       req.body,

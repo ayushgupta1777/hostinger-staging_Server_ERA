@@ -1,12 +1,36 @@
-// ============================================
-// backend/routes/userRoutes.js
-// ============================================
 import express from 'express';
 import Address from '../models/Address.js';
+import User from '../models/User.js';
 import { protect } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
+import {
+  getProfile,
+  updateProfile,
+  changePassword
+} from '../controllers/userController.js';
 
 const router = express.Router();
+
+/**
+ * @desc    Get profile
+ * @route   GET /api/users/profile
+ * @access  Private
+ */
+router.get('/profile', protect, getProfile);
+
+/**
+ * @desc    Update profile
+ * @route   PUT /api/users/update-profile
+ * @access  Private
+ */
+router.put('/update-profile', protect, updateProfile);
+
+/**
+ * @desc    Change password
+ * @route   PUT /api/users/change-password
+ * @access  Private
+ */
+router.put('/change-password', protect, changePassword);
 
 /**
  * @desc    Get user addresses
