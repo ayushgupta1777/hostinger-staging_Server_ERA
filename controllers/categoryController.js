@@ -17,9 +17,15 @@ export const getCategories = async (req, res, next) => {
     
     const query = { isActive: true };
     if (parent) {
-      query.parent = parent;
+      if (parent === 'all') {
+        // Do nothing, return all active categories
+      } else {
+        query.parent = parent;
+      }
     } else {
-      query.parent = null; // Get only root categories
+      // Default to root categories only if requested, otherwise return all
+      // The user wants ALL categories for the filter
+      // query.parent = null; 
     }
 
     const categories = await Category.find(query)
@@ -197,6 +203,28 @@ export const getCategoryTree = async (req, res, next) => {
     res.json({
       success: true,
       data: { categories: tree }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+/**
+ * @desc    Get subcategories by parent category
+ * @route   GET /api/categories/:parentId/subcategories
+ * @access  Public
+ */
+export const getSubcategoriesByParent = async (req, res, next) => {
+  try {
+    const { parentId } = req.params;
+
+    const subcategories = await Category.find({
+      parent: parentId,
+      isActive: true
+    }).sort('sortOrder');
+
+    res.json({
+      success: true,
+      data: subcategories
     });
   } catch (error) {
     next(error);

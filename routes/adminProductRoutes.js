@@ -5,7 +5,8 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
-  toggleProductStatus
+  toggleProductStatus,
+  toggleProductFeatured
 } from '../controllers/adminProductController.js';
 
 const router = express.Router();
@@ -17,5 +18,6 @@ router.post('/', createProduct);
 router.put('/:id', updateProduct);
 router.delete('/:id', deleteProduct);
 router.patch('/:id/toggle', toggleProductStatus);
+router.patch('/:id/featured', toggleProductFeatured);
 
 export default router;

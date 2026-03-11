@@ -18,6 +18,7 @@ const router = express.Router();
 router.get('/', getCategories);
 router.get('/tree', getCategoryTree);
 router.get('/:id', getCategory);
+router.get('/:parentId/subcategories', getSubcategoriesByParent);
 
 // Admin routes
 router.post('/', protect, authorize('admin'), createCategory);

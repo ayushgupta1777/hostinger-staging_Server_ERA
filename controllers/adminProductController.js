@@ -143,3 +143,33 @@ export const toggleProductStatus = async (req, res, next) => {
     next(error);
   }
 };
+export const toggleProductFeatured = async (req, res, next) => {
+  try {
+    const { isFeatured } = req.body;
+    
+    if (isFeatured) {
+      const featuredCount = await Product.countDocuments({ isFeatured: true });
+      if (featuredCount >= 5) {
+        return next(new AppError('Maximum of 5 featured products allowed', 400));
+      }
+    }
+
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      { isFeatured },
+      { new: true }
+    );
+
+    if (!product) {
+      return next(new AppError('Product not found', 404));
+    }
+
+    res.json({
+      success: true,
+      message: `Product ${isFeatured ? 'pinned to' : 'removed from'} featured`,
+      data: { product }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
