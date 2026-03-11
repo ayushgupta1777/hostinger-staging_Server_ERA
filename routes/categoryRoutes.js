@@ -9,7 +9,8 @@ import {
   createCategory,
   updateCategory,
   deleteCategory,
-  getCategoryTree
+  getCategoryTree,
+  getSubcategoriesByParent
 } from '../controllers/categoryController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
