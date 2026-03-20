@@ -51,7 +51,8 @@ export const createOrder = async (req, res, next) => {
     // Calculate totals
     const subtotal = cart.totalPrice;
     let shipping = subtotal >= 500 ? 0 : 50;
-    const tax = Math.round(subtotal * 0.18);
+    const taxRate = parseFloat(process.env.TAX_RATE) || 3;
+    const tax = Math.round(subtotal * (taxRate / 100));
     let total = subtotal + shipping + tax;
 
     // Handle Coupon

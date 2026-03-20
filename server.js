@@ -20,7 +20,8 @@ import resellerRoutes from './routes/resellerRoutes.js';
 import vendorRoutes from './routes/vendorRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
-import categoryRoutes from './routes/categoryRoutes.js'; // ADD THIS LINE
+import categoryRoutes from './routes/categoryRoutes.js';
+import chatRoutes from './routes/chatRoutes.js'; // NEW: Chat routes
 
 import adminResellerRoutes from './routes/adminResellerRoutes.js';
 import returnRoutes from './routes/returnRoutes.js';
@@ -131,7 +132,8 @@ app.use(
   webhookRoutes
 );
 
-app.use('/api/categories', categoryRoutes); // ADD THIS LINE
+app.use('/api/categories', categoryRoutes);
+app.use('/api/chat', chatRoutes); // NEW: Chat API mount
 
 app.use('/api/admin/resellers', adminResellerRoutes);
 app.use('/api/returns', returnRoutes);
@@ -293,6 +295,8 @@ app.use((req, res) => {
   });
 });
 
+import { initSocket } from './utils/socket.js'; // NEW: Socket.io
+
 // Start server
 const PORT = process.env.PORT || 5001;
 const server = app.listen(PORT, () => {
@@ -300,6 +304,10 @@ const server = app.listen(PORT, () => {
   console.log(`📚 API Docs: http://localhost:${PORT}/api-docs`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
 });
+
+// Initialize Socket.io
+initSocket(server);
+
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

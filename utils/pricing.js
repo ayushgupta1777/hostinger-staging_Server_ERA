@@ -7,7 +7,7 @@
  */
 export const calculateOrderPricing = async (cartItems) => {
   const platformFeePercent = parseFloat(process.env.PLATFORM_FEE_PERCENT) || 5;
-  const taxRate = parseFloat(process.env.TAX_RATE) || 18;
+  const taxRate = parseFloat(process.env.TAX_RATE) || 3;
   const freeShippingThreshold = parseFloat(process.env.FREE_SHIPPING_ABOVE) || 500;
   const defaultShippingCost = parseFloat(process.env.DEFAULT_SHIPPING_COST) || 50;
 
