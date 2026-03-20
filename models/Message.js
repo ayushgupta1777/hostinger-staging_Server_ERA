@@ -25,6 +25,11 @@ const messageSchema = new mongoose.Schema({
     enum: ['sent', 'delivered', 'seen'],
     default: 'sent',
   },
+  orderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+    required: false,
+  },
 }, { timestamps: true });
 
 export default mongoose.model('Message', messageSchema);

@@ -34,11 +34,15 @@ export const initSocket = (server) => {
           senderId,
           senderRole,
           text,
+          orderId: data.orderId || null,
           status: 'sent'
         });
 
         // Update conversation summary
-        chat.lastMessage = text;
+        chat.lastMessage = message.text;
+        if (data.orderId) {
+            chat.lastOrderId = data.orderId;
+        }
         if (senderRole === 'user') {
           chat.unreadCountAdmin += 1;
         } else {
@@ -59,7 +63,8 @@ export const initSocket = (server) => {
           chatId: chat._id,
           lastMessage: text,
           updatedAt: chat.updatedAt,
-          unreadCountAdmin: chat.unreadCountAdmin
+          unreadCountAdmin: chat.unreadCountAdmin,
+          lastOrderId: chat.lastOrderId
         });
 
       } catch (err) {

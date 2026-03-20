@@ -23,6 +23,11 @@ const chatSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  lastOrderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+    required: false,
+  },
 }, { timestamps: true });
 
 export default mongoose.model('Chat', chatSchema);
