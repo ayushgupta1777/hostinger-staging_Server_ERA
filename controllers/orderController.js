@@ -4,6 +4,7 @@ import Product from '../models/Product.js';
 import Wallet from '../models/Wallet.js';
 import Coupon from '../models/Coupon.js';
 import { AppError } from '../middleware/errorHandler.js';
+import OrderStateMachine from '../utils/OrderStateMachine.js';
 
 // Generate unique order number
 const generateOrderNumber = async () => {
@@ -299,18 +300,10 @@ export const cancelOrder = async (req, res, next) => {
       return next(new AppError('Cannot cancel shipped orders. Please request a return instead.', 400));
     }
 
-    order.orderStatus = 'cancelled';
-    order.cancelledAt = new Date();
-    order.cancelledBy = req.user.id;
-    order.cancellationReason = reason || 'Customer requested cancellation';
-
-    // ✅ RESTORE STOCK
-    for (const item of order.items) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stock: item.quantity } }
-      );
-    }
+    await OrderStateMachine.updateOrderStatus(order, 'cancelled', {
+      changedBy: req.user.id,
+      reason: reason || 'Customer requested cancellation'
+    });
 
     // ✅ HANDLE REFUNDS (ONLY FOR ONLINE PAYMENTS)
     if (order.paymentMethod !== 'cod' && order.paymentStatus === 'completed') {
@@ -357,20 +350,10 @@ export const updateOrderStatus = async (req, res, next) => {
       return next(new AppError('Order not found', 404));
     }
 
-    order.orderStatus = status;
-
-    if (status === 'confirmed') order.confirmedAt = new Date();
-    if (status === 'processing') order.processingAt = new Date();
-    if (status === 'packed') order.packedAt = new Date();
-    if (status === 'shipped') order.shippedAt = new Date();
-    if (status === 'delivered') {
-      order.deliveredAt = new Date();
-      order.paymentStatus = 'completed';
-
-      // Calculate return window end date
-      const returnWindowDays = order.returnWindow || 7;
-      order.returnWindowEndDate = new Date(Date.now() + returnWindowDays * 24 * 60 * 60 * 1000);
-    }
+    await OrderStateMachine.updateOrderStatus(order, status, {
+      changedBy: req.user ? req.user.id : null,
+      reason: `Status updated to ${status}`
+    });
 
     await order.save();
 

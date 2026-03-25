@@ -61,7 +61,9 @@ const orderSchema = new mongoose.Schema({
       'out_for_delivery', // ✅ ADD THIS
       'delivered',      // Successfully delivered
       'cancelled',      // Order cancelled
-      'returned'        // Order returned
+      'returned',       // Order returned
+      'refunded',       // Order refunded
+      'completed'       // Return window over or admin override
     ],
     default: 'pending'
   },

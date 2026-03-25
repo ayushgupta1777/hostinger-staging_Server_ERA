@@ -156,7 +156,7 @@ class OrderStateMachine {
   }
 
   static async restoreStock(order) {
-    const Product = require('../models/Product.js').default;
+    const Product = (await import('../models/Product.js')).default;
     for (const item of order.items) {
       await Product.findByIdAndUpdate(item.product, {
         $inc: { stock: item.quantity, soldCount: -item.quantity }
@@ -165,9 +165,9 @@ class OrderStateMachine {
   }
 
   static async creditResellerEarnings(order) {
-    const Wallet = require('../models/Wallet.js').default;
-    const WalletTransaction = require('../models/WalletTransaction.js').default;
-    const User = require('../models/User.js').default;
+    const Wallet = (await import('../models/Wallet.js')).default;
+    const WalletTransaction = (await import('../models/WalletTransaction.js')).default;
+    const User = (await import('../models/User.js')).default;
 
     // Use order.reseller if available, otherwise fallback to order.user
     const userId = order.reseller || order.user;
@@ -198,7 +198,7 @@ class OrderStateMachine {
 
       order.resellerEarningStatus = 'credited';
 
-      const notificationService = require('../services/notificationService.js').default;
+      const notificationService = (await import('../services/notificationService.js')).default;
       const userObj = await User.findById(userId);
       if (userObj) {
         await notificationService.sendNotification({
@@ -213,7 +213,7 @@ class OrderStateMachine {
   }
 
   static async reverseResellerEarnings(order) {
-    const Wallet = require('../models/Wallet.js').default;
+    const Wallet = (await import('../models/Wallet.js')).default;
     const userId = order.reseller || order.user;
     const wallet = await Wallet.findOne({ user: userId });
 

@@ -608,7 +608,7 @@ export const processRefund = async (req, res, next) => {
       const resellerWallet = await Wallet.findOne({ user: order.reseller });
       
       if (resellerWallet) {
-        resellerWallet.balance -= order.totalResellerEarning;
+        resellerWallet.balance -= order.resellerEarning;
         await resellerWallet.save();
 
         await WalletTransaction.create({
@@ -616,7 +616,7 @@ export const processRefund = async (req, res, next) => {
           user: order.reseller,
           type: 'debit',
           source: 'reversal',
-          amount: order.totalResellerEarning,
+          amount: order.resellerEarning,
           balanceAfter: resellerWallet.balance,
           description: `Earning reversal for returned order ${order.orderNo}`,
           referenceId: order._id.toString(),

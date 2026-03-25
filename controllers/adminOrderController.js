@@ -1,8 +1,6 @@
-// 1. Admin Order Controller
-// backend/controllers/adminOrderController.js
-// ============================================
 import Order from '../models/Order.js';
 import { AppError } from '../middleware/errorHandler.js';
+import OrderStateMachine from '../utils/OrderStateMachine.js';
 
 /**
  * @desc    Get all orders with filters
@@ -139,27 +137,15 @@ export const updateOrderStatus = async (req, res, next) => {
     }
 
     // Validate status transition
-    const validStatuses = ['pending', 'confirmed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled'];
+    const validStatuses = ['pending', 'confirmed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled', 'completed'];
     if (!validStatuses.includes(status)) {
-      return next(new AppError('Invalid status', 400));
+      return next(new AppError('Invalid status. Valid statuses are: ' + validStatuses.join(', '), 400));
     }
 
-    order.orderStatus = status;
-
-    // Update timestamps
-    if (status === 'confirmed') order.confirmedAt = new Date();
-    if (status === 'processing') order.processingAt = new Date();
-    if (status === 'packed') order.packedAt = new Date();
-    if (status === 'shipped') order.shippedAt = new Date();
-    if (status === 'delivered') {
-      order.deliveredAt = new Date();
-      order.paymentStatus = 'completed';
-      
-      // Calculate return window
-      const returnWindowDays = 7;
-      order.returnWindowEndDate = new Date(Date.now() + returnWindowDays * 24 * 60 * 60 * 1000);
-    }
-    if (status === 'cancelled') order.cancelledAt = new Date();
+    await OrderStateMachine.updateOrderStatus(order, status, {
+      changedBy: req.user ? req.user.id : null,
+      reason: `Admin updated status to ${status}`
+    });
 
     await order.save();
 
@@ -193,18 +179,10 @@ export const cancelOrder = async (req, res, next) => {
       return next(new AppError('Cannot cancel this order', 400));
     }
 
-    order.orderStatus = 'cancelled';
-    order.cancelledAt = new Date();
-    order.cancellationReason = reason;
-
-    // Restore stock
-    const Product = (await import('../models/Product.js')).default;
-    for (const item of order.items) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stock: item.quantity } }
-      );
-    }
+    await OrderStateMachine.updateOrderStatus(order, 'cancelled', {
+      changedBy: req.user ? req.user.id : null,
+      reason: reason || 'Admin cancelled order'
+    });
 
     await order.save();
 
