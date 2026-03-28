@@ -104,10 +104,27 @@ async function handleShipmentStatusUpdate(event) {
     'OUT FOR DELIVERY': 'shipped',
     'DELIVERED': 'delivered',
     'RTO': 'cancelled',
-    'RETURNED': 'returned'
+    'RETURNED': 'returned',
+    // Numeric status codes from Shiprocket
+    '6': 'shipped',          // Shipped
+    '7': 'delivered',        // Delivered
+    '13': 'returned',        // Returned
+    '17': 'shipped',          // Out for delivery
+    '18': 'shipped',          // In transit
+    '19': 'shipped',          // Handed over
+    '21': 'shipped',          // Re-attempted
+    '22': 'shipped',          // Delivery re-attempted
+    '11': 'processing',       // Pickup Scheduled
+    '10': 'processing'        // Ready to ship
   };
 
-  const newOrderStatus = statusMap[current_status];
+  const statusKey = String(current_status).toUpperCase();
+  const newOrderStatus = statusMap[statusKey];
+
+  if (!newOrderStatus) {
+    console.log(`ℹ️ No mapping found for Shiprocket status: ${current_status}`);
+  }
+
   if (newOrderStatus && order.orderStatus !== newOrderStatus) {
     order.orderStatus = newOrderStatus;
 
