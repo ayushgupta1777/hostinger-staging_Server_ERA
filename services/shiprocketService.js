@@ -325,6 +325,32 @@ class ShiprocketService {
   }
 
   /**
+   * Generate invoice
+   */
+  async generateInvoice(orderIds) {
+    const response = await this.request('POST', '/orders/print/invoice', {
+      ids: Array.isArray(orderIds) ? orderIds : [orderIds]
+    });
+
+    return {
+      invoiceUrl: response.is_v2 ? response.invoice_url : response.label_url
+    };
+  }
+
+  /**
+   * Generate packing slip
+   */
+  async generatePackingSlip(shipmentIds) {
+    const response = await this.request('POST', '/courier/generate/packing_slip', {
+      shipment_id: Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds]
+    });
+
+    return {
+      packingSlipUrl: response.label_url
+    };
+  }
+
+  /**
    * Generate manifest
    */
   async generateManifest(shipmentIds) {

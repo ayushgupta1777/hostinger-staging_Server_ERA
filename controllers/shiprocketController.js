@@ -325,6 +325,56 @@ export const generateLabel = async (req, res, next) => {
 };
 
 /**
+ * @desc    Generate order invoice
+ * @route   GET /api/shiprocket/invoice/:orderId
+ * @access  Private (Admin/Vendor)
+ */
+export const getInvoice = async (req, res, next) => {
+  try {
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return next(new AppError('Order not found', 404));
+
+    // Shiprocket needs their internal Order ID, but we can try with orderNo too if configured
+    // Usually they need the ID from their system which we store in shiprocket.orderId
+    const targetId = order.shiprocket?.orderId || order.orderNo;
+    
+    const result = await shiprocketService.generateInvoice(targetId);
+
+    res.json({
+      success: true,
+      data: { invoiceUrl: result.invoiceUrl }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Generate packing slip
+ * @route   GET /api/shiprocket/packing-slip/:orderId
+ * @access  Private (Admin/Vendor)
+ */
+export const getPackingSlip = async (req, res, next) => {
+  try {
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return next(new AppError('Order not found', 404));
+
+    if (!order.shiprocket || !order.shiprocket.shipmentId) {
+      return next(new AppError('No shipment found for this order', 400));
+    }
+
+    const result = await shiprocketService.generatePackingSlip(order.shiprocket.shipmentId);
+
+    res.json({
+      success: true,
+      data: { packingSlipUrl: result.packingSlipUrl }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * @desc    Generate manifest
  * @route   GET /api/shiprocket/manifest/:orderId
  * @access  Private (Admin/Vendor)

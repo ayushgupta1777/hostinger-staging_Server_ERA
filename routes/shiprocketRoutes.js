@@ -10,6 +10,8 @@ import {
   setDefaultPickupLocation,
   createShipment,
   generateLabel,
+  getInvoice,
+  getPackingSlip,
   generateManifest,
   trackShipment,
   cancelShipment,
@@ -30,6 +32,8 @@ router.patch('/pickup-locations/:locationId/default', setDefaultPickupLocation);
 // Shipment operations
 router.post('/shipment/:orderId', createShipment);
 router.get('/label/:orderId', generateLabel);
+router.get('/invoice/:orderId', getInvoice);
+router.get('/packing-slip/:orderId', getPackingSlip);
 router.get('/manifest/:orderId', generateManifest);
 router.get('/track/:orderId', trackShipment);
 router.delete('/shipment/:orderId', cancelShipment);
