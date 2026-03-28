@@ -17,6 +17,7 @@ import {
   cancelShipment,
   schedulePickup
 } from '../controllers/shiprocketController.js';
+import { getCustomPickList } from '../controllers/customDocController.js';
 
 const router = express.Router();
 
@@ -38,5 +39,6 @@ router.get('/manifest/:orderId', generateManifest);
 router.get('/track/:orderId', trackShipment);
 router.delete('/shipment/:orderId', cancelShipment);
 router.post('/schedule-pickup/:orderId', schedulePickup);
+router.get('/pick-list/:orderId', getCustomPickList);
 
 export default router;
