@@ -6,6 +6,42 @@ import ShiprocketSettings from '../models/ShiprocketSettings.js';
 import Order from '../models/Order.js';
 import shiprocketService from '../services/shiprocketService.js';
 import { AppError } from '../middleware/errorHandler.js';
+import axios from 'axios';
+
+/**
+ * @desc    Proxy PDF download explicitly for Android devices
+ * @route   GET /api/shiprocket/proxy-pdf?url=...
+ * @access  Private (Admin/Vendor)
+ */
+export const proxyPdfDownload = async (req, res, next) => {
+  try {
+    const { url } = req.query;
+    if (!url) return next(new AppError('URL required', 400));
+    
+    const decodedUrl = decodeURIComponent(url);
+    
+    // SSRF Protection: Ensure url points to Shiprocket or known safe S3 bucket
+    if (!decodedUrl.startsWith('https://kr-shiprocket') && 
+        !decodedUrl.includes('shiprocket') && 
+        !decodedUrl.includes('amazonaws.com/label')) {
+      return next(new AppError('Unauthorized proxy destination', 403));
+    }
+    
+    const response = await axios({
+      url: decodedUrl,
+      method: 'GET',
+      responseType: 'stream'
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Order_Document_${Date.now()}.pdf"`);
+    
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('Proxy PDF error:', error.message);
+    next(new AppError('Failed to fetch PDF document. The link might be expired.', 500));
+  }
+};
 
 /**
  * @desc    Get Shiprocket settings
@@ -315,9 +351,12 @@ export const generateLabel = async (req, res, next) => {
     order.shiprocket.labelUrl = result.labelUrl;
     await order.save();
 
+    const hostUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+    const proxyUrl = `${hostUrl}/api/shiprocket/proxy-pdf?url=${encodeURIComponent(result.labelUrl)}`;
+
     res.json({
       success: true,
-      data: { labelUrl: result.labelUrl }
+      data: { labelUrl: proxyUrl }
     });
   } catch (error) {
     next(error);
@@ -340,9 +379,12 @@ export const getInvoice = async (req, res, next) => {
     
     const result = await shiprocketService.generateInvoice(targetId);
 
+    const hostUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+    const proxyUrl = `${hostUrl}/api/shiprocket/proxy-pdf?url=${encodeURIComponent(result.invoiceUrl)}`;
+
     res.json({
       success: true,
-      data: { invoiceUrl: result.invoiceUrl }
+      data: { invoiceUrl: proxyUrl }
     });
   } catch (error) {
     next(error);
@@ -365,9 +407,12 @@ export const getPackingSlip = async (req, res, next) => {
 
     const result = await shiprocketService.generatePackingSlip(order.shiprocket.shipmentId);
 
+    const hostUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+    const proxyUrl = `${hostUrl}/api/shiprocket/proxy-pdf?url=${encodeURIComponent(result.packingSlipUrl)}`;
+
     res.json({
       success: true,
-      data: { packingSlipUrl: result.packingSlipUrl }
+      data: { packingSlipUrl: proxyUrl }
     });
   } catch (error) {
     next(error);

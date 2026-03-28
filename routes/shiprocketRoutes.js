@@ -15,11 +15,15 @@ import {
   generateManifest,
   trackShipment,
   cancelShipment,
-  schedulePickup
+  schedulePickup,
+  proxyPdfDownload
 } from '../controllers/shiprocketController.js';
 import { getCustomPickList } from '../controllers/customDocController.js';
 
 const router = express.Router();
+
+// Document Proxy (needs auth)
+router.get('/proxy-pdf', proxyPdfDownload);
 
 router.use(protect, authorize('admin', 'vendor'));
 
