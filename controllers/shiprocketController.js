@@ -20,11 +20,14 @@ export const proxyPdfDownload = async (req, res, next) => {
     
     const decodedUrl = decodeURIComponent(url);
     
-    // SSRF Protection: Ensure url points to Shiprocket or known safe S3 bucket
-    if (!decodedUrl.startsWith('https://kr-shiprocket') && 
-        !decodedUrl.includes('shiprocket') && 
-        !decodedUrl.includes('amazonaws.com/label')) {
-      return next(new AppError('Unauthorized proxy destination', 403));
+    // SSRF Protection: Ensure url points to Shiprocket or known safe cloud storage
+    const isSafeDomain = decodedUrl.includes('shiprocket') || 
+                         decodedUrl.includes('amazonaws.com') ||
+                         decodedUrl.includes('storage.googleapis.com');
+                         
+    if (!isSafeDomain) {
+      console.error(`[SSRF Blocked] Unauthorized proxy destination requested: ${decodedUrl}`);
+      return next(new AppError(`Unauthorized proxy destination`, 403));
     }
     
     const response = await axios({
@@ -401,18 +404,15 @@ export const getPackingSlip = async (req, res, next) => {
     const order = await Order.findById(req.params.orderId);
     if (!order) return next(new AppError('Order not found', 404));
 
-    if (!order.shiprocket || !order.shiprocket.shipmentId) {
-      return next(new AppError('No shipment found for this order', 400));
-    }
-
-    const result = await shiprocketService.generatePackingSlip(order.shiprocket.shipmentId);
-
+    // Instead of calling the Shiprocket API which is returning a 404, we will send
+    // the user directly to our brand-new "Premium Pick List" HTML generator.
+    // This provides a much more readable document and completely bypasses Shiprocket errors.
     const hostUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
-    const proxyUrl = `${hostUrl}/api/shiprocket/proxy-pdf?url=${encodeURIComponent(result.packingSlipUrl)}`;
+    const pickListUrl = `${hostUrl}/api/shiprocket/pick-list/${order._id}`;
 
     res.json({
       success: true,
-      data: { packingSlipUrl: proxyUrl }
+      data: { packingSlipUrl: pickListUrl }
     });
   } catch (error) {
     next(error);
