@@ -314,12 +314,24 @@ class ShiprocketService {
    * Generate shipping label
    */
   async generateLabel(shipmentIds) {
+    console.log(`[Shiprocket] Generating label for shipments: ${shipmentIds}`);
     const response = await this.request('POST', '/courier/generate/label', {
-      shipment_id: Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds]
+      shipment_id: Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds],
+      // Adding config to make the label more readable/detailed if supported
+      config: {
+        template_name: 'default' // This usually includes item details in Shiprocket
+      }
     });
 
+    const labelUrl = response.label_url;
+    
+    if (!labelUrl) {
+      console.error('[Shiprocket] No label URL in response:', response);
+      throw new Error('Shiprocket did not return a label URL');
+    }
+
     return {
-      labelUrl: response.label_url,
+      labelUrl: labelUrl,
       labelCreatedDate: response.label_created_date
     };
   }
@@ -328,26 +340,41 @@ class ShiprocketService {
    * Generate invoice
    */
   async generateInvoice(orderIds) {
+    console.log(`[Shiprocket] Generating invoice for orders: ${orderIds}`);
     const response = await this.request('POST', '/orders/print/invoice', {
       ids: Array.isArray(orderIds) ? orderIds : [orderIds]
     });
 
-    return {
-      invoiceUrl: response.is_v2 ? response.invoice_url : response.label_url
-    };
+    // Shiprocket returns invoice_url or label_url depending on the request type/version
+    const invoiceUrl = response.is_v2 ? response.invoice_url : (response.label_url || response.invoice_url);
+    
+    if (!invoiceUrl) {
+      console.error('[Shiprocket] No invoice URL in response:', response);
+      throw new Error('Shiprocket did not return an invoice URL');
+    }
+
+    return { invoiceUrl };
   }
 
   /**
    * Generate packing slip
+   * FIXED: Correct endpoint is /orders/print/packing_slip (not /courier/generate/packing_slip)
    */
   async generatePackingSlip(shipmentIds) {
-    const response = await this.request('POST', '/courier/generate/packing_slip', {
+    console.log(`[Shiprocket] Generating packing slip for shipments: ${shipmentIds}`);
+    const response = await this.request('POST', '/orders/print/packing_slip', {
       shipment_id: Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds]
     });
 
-    return {
-      packingSlipUrl: response.label_url
-    };
+    // Extract URL similarly to invoice/label
+    const packingSlipUrl = response.label_url || response.packing_slip_url || response.invoice_url;
+
+    if (!packingSlipUrl) {
+      console.error('[Shiprocket] No packing slip URL in response:', response);
+      throw new Error('Shiprocket did not return a packing slip URL');
+    }
+
+    return { packingSlipUrl };
   }
 
   /**
