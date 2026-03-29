@@ -41,6 +41,8 @@ import reviewRoutes from './routes/reviewRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
 import appSettingRoutes from './routes/appSettingRoutes.js';
 
+import developerRoutes from './routes/developerRoutes.js';
+
 // Load environment variables
 dotenv.config();
 
@@ -139,6 +141,7 @@ app.use('/api/admin/resellers', adminResellerRoutes);
 app.use('/api/returns', returnRoutes);
 app.use('/api/shiprocket', shiprocketRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/dev', developerRoutes);
 
 app.use('/api/banners', bannerRoutes);
 app.use('/api/upload', uploadRoutes);

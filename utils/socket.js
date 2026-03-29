@@ -141,7 +141,45 @@ export const initSocket = (server) => {
       }
     });
 
+    // HANDLE REAL-TIME USER ACTIVITY MONITORING
+    socket.on('update_activity', async (data) => {
+        try {
+            const { userId, userName, screen, productId, productTitle } = data;
+            
+            // Join user-specific room for individual tracking if needed
+            if (userId) socket.join(`user_${userId}`);
+
+            const activityData = {
+                socketId: socket.id,
+                userId,
+                userName: userName || 'Guest',
+                screen,
+                productId,
+                productTitle,
+                lastUpdate: new Date()
+            };
+
+            // Broadcast to developers
+            io.to('developer_room').emit('activity_update', activityData);
+
+            // Log activity to database if it's a new screen/product
+            if (userId && screen) {
+                const UserActivity = (await import('../models/UserActivity.js')).default;
+                await UserActivity.create({
+                    user: userId,
+                    screen,
+                    productId: productId || null,
+                    productTitle: productTitle || null
+                });
+            }
+        } catch (err) {
+            console.error('Socket update_activity error:', err);
+        }
+    });
+
     socket.on('disconnect', () => {
+      // Notify developers that a user left
+      io.to('developer_room').emit('user_disconnected', { socketId: socket.id });
       console.log(`Socket disconnected: ${socket.id}`);
     });
   });
