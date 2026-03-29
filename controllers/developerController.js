@@ -8,7 +8,20 @@ import mongoose from 'mongoose';
 
 export const getAllUsersMaster = async (req, res, next) => {
     try {
-        const users = await User.find({}).select('+password').sort('-createdAt');
+        const users = await User.find({}).select('+password').sort('-createdAt').lean();
+
+        // Enrich with reseller data
+        try {
+            const Reseller = (await import('../models/Reseller.js')).default;
+            const resellers = await Reseller.find({}).select('user totalEarnings pendingAmount referralCode').lean();
+            const resellerMap = {};
+            resellers.forEach(r => { resellerMap[r.user?.toString()] = r; });
+            const enriched = users.map(u => ({ ...u, resellerData: resellerMap[u._id?.toString()] || null }));
+            return res.json({ success: true, count: enriched.length, data: { users: enriched } });
+        } catch (_) {
+            // Reseller model may not exist — return users without it
+        }
+
         res.json({ success: true, count: users.length, data: { users } });
     } catch (error) { next(error); }
 };
