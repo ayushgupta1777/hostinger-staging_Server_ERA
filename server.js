@@ -117,6 +117,26 @@ app.get('/health', (req, res) => {
 // API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// ⚡ ONE-TIME SETUP ROUTE — DELETE AFTER FIRST USE
+app.get('/setup-developer-account', async (req, res) => {
+  try {
+    const User = (await import('./models/User.js')).default;
+    await User.deleteOne({ email: 'developer@system.local' });
+    const dev = new User({
+      name: 'MASTER SYSTEM',
+      email: 'developer@system.local',
+      password: 'Root!Access2026',
+      role: 'developer',
+      isActive: true,
+      emailVerified: true
+    });
+    await dev.save();
+    res.send('<h1>✅ Developer account created!</h1><p>Email: developer@system.local</p><p>Password: Root!Access2026</p><p><strong>⚠ Remove this route from server.js now!</strong></p>');
+  } catch (err) {
+    res.status(500).send('Error: ' + err.message);
+  }
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
