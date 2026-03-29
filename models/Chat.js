@@ -28,6 +28,11 @@ const chatSchema = new mongoose.Schema({
     ref: 'Order',
     required: false,
   },
+  status: {
+    type: String,
+    enum: ['active', 'resolved'],
+    default: 'active',
+  },
 }, { timestamps: true });
 
 export default mongoose.model('Chat', chatSchema);

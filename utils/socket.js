@@ -24,22 +24,29 @@ export const initSocket = (server) => {
     // Handle new messages
     socket.on('send_message', async (data) => {
       try {
-        const { chatId, senderId, senderRole, text } = data;
+        const { chatId, senderId, senderRole, text, messageType = 'text' } = data;
         
         let chat = await Chat.findById(chatId);
         if (!chat) return;
+
+        // If chat is resolved, don't allow new user messages
+        if (chat.status === 'resolved' && senderRole === 'user') {
+          return socket.emit('error_message', { message: 'This chat session has been resolved. Please start a new one.' });
+        }
 
         const message = await Message.create({
           chatId,
           senderId,
           senderRole,
           text,
+          messageType,
           orderId: data.orderId || null,
           status: 'sent'
         });
 
         // Update conversation summary
         chat.lastMessage = message.text;
+        chat.status = 'active'; // Re-activate if admin sends message? No, let's keep it simple for now.
         if (data.orderId) {
             chat.lastOrderId = data.orderId;
         }
@@ -64,11 +71,45 @@ export const initSocket = (server) => {
           lastMessage: text,
           updatedAt: chat.updatedAt,
           unreadCountAdmin: chat.unreadCountAdmin,
-          lastOrderId: chat.lastOrderId
+          lastOrderId: chat.lastOrderId,
+          status: chat.status
         });
 
       } catch (err) {
         console.error('Socket send_message error:', err);
+      }
+    });
+
+    // Handle resolving a chat
+    socket.on('resolve_chat', async ({ chatId }) => {
+      try {
+        const chat = await Chat.findById(chatId);
+        if (!chat) return;
+
+        chat.status = 'resolved';
+        await chat.save();
+
+        // Create a system message
+        const systemMessage = await Message.create({
+            chatId,
+            senderId: chat.userId, // Use user ID as placeholder sender
+            senderRole: 'admin',
+            text: 'This support session has been marked as resolved.',
+            messageType: 'system'
+        });
+
+        // Notify user and admins
+        io.to(chat.userId.toString()).emit('chat_resolved', { chatId, message: systemMessage });
+        io.to('admin_room').emit('chat_resolved', { chatId, message: systemMessage });
+        
+        // Update admin list
+        io.to('admin_room').emit('chat_updated', {
+            chatId: chat._id,
+            status: 'resolved',
+            updatedAt: chat.updatedAt
+        });
+      } catch (err) {
+        console.error('Socket resolve_chat error:', err);
       }
     });
 

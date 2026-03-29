@@ -58,22 +58,47 @@ export const getAllOrders = async (req, res, next) => {
  */
 export const getOrderStats = async (req, res, next) => {
   try {
-    const totalOrders = await Order.countDocuments();
-    const pendingOrders = await Order.countDocuments({ orderStatus: 'pending' });
-    const confirmedOrders = await Order.countDocuments({ orderStatus: 'confirmed' });
-    const processingOrders = await Order.countDocuments({ orderStatus: 'processing' });
-    const shippedOrders = await Order.countDocuments({ orderStatus: 'shipped' });
-    const deliveredOrders = await Order.countDocuments({ orderStatus: 'delivered' });
-    const cancelledOrders = await Order.countDocuments({ orderStatus: 'cancelled' });
+    const { timeframe, startDate: customStart, endDate: customEnd } = req.query;
 
-    // Calculate total revenue (only from delivered orders)
+    // Build date query
+    let dateQuery = {};
+    const now = new Date();
+
+    if (timeframe === 'today') {
+      const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+      dateQuery = { createdAt: { $gte: startOfDay } };
+    } else if (timeframe === 'week') {
+      const startOfWeek = new Date(now.setDate(now.getDate() - 7));
+      dateQuery = { createdAt: { $gte: startOfWeek } };
+    } else if (timeframe === 'month') {
+      const startOfMonth = new Date(now.setMonth(now.getMonth() - 1));
+      dateQuery = { createdAt: { $gte: startOfMonth } };
+    } else if (timeframe === 'custom' && customStart && customEnd) {
+      dateQuery = {
+        createdAt: {
+          $gte: new Date(customStart),
+          $lte: new Date(customEnd)
+        }
+      };
+    }
+
+    const totalOrders = await Order.countDocuments(dateQuery);
+    const pendingOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'pending' });
+    const confirmedOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'confirmed' });
+    const processingOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'processing' });
+    const packedOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'packed' });
+    const shippedOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'shipped' });
+    const deliveredOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'delivered' });
+    const cancelledOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'cancelled' });
+
+    // Calculate total revenue (only from delivered orders in timeframe)
     const revenueResult = await Order.aggregate([
-      { $match: { orderStatus: 'delivered' } },
+      { $match: { ...dateQuery, orderStatus: 'delivered' } },
       { $group: { _id: null, total: { $sum: '$total' } } }
     ]);
     const totalRevenue = revenueResult[0]?.total || 0;
 
-    // Get recent orders
+    // Get recent orders (always last 5, regardless of timeframe)
     const recentOrders = await Order.find()
       .populate('user', 'name')
       .sort('-createdAt')
@@ -86,6 +111,7 @@ export const getOrderStats = async (req, res, next) => {
         pendingOrders,
         confirmedOrders,
         processingOrders,
+        packedOrders,
         shippedOrders,
         deliveredOrders,
         cancelledOrders,
