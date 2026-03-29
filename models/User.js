@@ -76,7 +76,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  lastLoginAt: Date
+  lastLoginAt: Date,
+  fcmToken: {
+    type: String,
+    trim: true,
+  },
 }, {
   timestamps: true
 });

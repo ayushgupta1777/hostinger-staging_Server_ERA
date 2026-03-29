@@ -1,5 +1,56 @@
 import AppSetting from '../models/AppSetting.js';
+import User from '../models/User.js';
+import NotificationService from '../services/notificationService.js';
 import { AppError } from '../middleware/errorHandler.js';
+
+// ... existing methods ...
+
+export const releaseUpdate = async (req, res, next) => {
+    try {
+        const { version, updateUrl, releaseNotes } = req.body;
+
+        if (!version || !updateUrl) {
+            return next(new AppError('Version and Update URL are required', 400));
+        }
+
+        // 1. Update settings in Database
+        await AppSetting.findOneAndUpdate(
+            { key: 'latest_app_version' },
+            { value: version },
+            { upsert: true }
+        );
+        await AppSetting.findOneAndUpdate(
+            { key: 'app_update_url' },
+            { value: updateUrl },
+            { upsert: true }
+        );
+
+        // 2. Fetch users with FCM tokens
+        const usersWithToken = await User.find({ fcmToken: { $exists: true, $ne: '' } }).select('_id');
+        const userIds = usersWithToken.map(u => u._id);
+
+        // 3. Broadcast notification
+        if (userIds.length > 0) {
+            await NotificationService.sendBulkNotifications(userIds, {
+                type: 'app_update',
+                title: '🚀 New Update Available!',
+                message: `Version ${version} is now available. ${releaseNotes || 'Update now for a better experience.'}`,
+                data: {
+                    version,
+                    updateUrl,
+                    type: 'app_update'
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            message: `App version ${version} published and ${userIds.length} users notified.`
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
 export const getSettings = async (req, res, next) => {
     try {
