@@ -290,6 +290,15 @@ export const cancelOrder = async (req, res, next) => {
     }
 
     // ✅ FIX: Check if cancellation is allowed
+    // If already cancelled, just return success (idempotency)
+    if (order.orderStatus === 'cancelled') {
+       return res.json({
+         success: true,
+         message: 'Order was already cancelled',
+         data: { order }
+       });
+    }
+
     const cancellableStatuses = ['pending', 'confirmed', 'processing'];
     if (!cancellableStatuses.includes(order.orderStatus)) {
       return next(new AppError(`Cannot cancel order in ${order.orderStatus} status`, 400));
