@@ -2,6 +2,8 @@ import Cart from '../models/Cart.js';
 import Product from '../models/Product.js';
 import { AppError } from '../middleware/errorHandler.js';
 
+import User from '../models/User.js';
+
 export const getCart = async (req, res, next) => {
   try {
     let cart = await Cart.findOne({ user: req.user.id })
@@ -20,6 +22,15 @@ export const getCart = async (req, res, next) => {
 export const addToCart = async (req, res, next) => {
   try {
     const { productId, quantity = 1, resellPrice = 0 } = req.body;
+
+    // Validate reseller status if margin is provided
+    if (resellPrice > 0) {
+      const user = await User.findById(req.user.id);
+      const isReseller = user?.resellerApplication?.status === 'approved';
+      if (!isReseller) {
+        return next(new AppError('Only approved resellers can add a resell margin', 403));
+      }
+    }
 
     const product = await Product.findById(productId);
     if (!product || !product.isActive) {
@@ -70,6 +81,15 @@ export const updateCartItem = async (req, res, next) => {
   try {
     const { itemId } = req.params;
     const { quantity, resellPrice } = req.body;
+
+    // Validate reseller status if margin is modified
+    if (resellPrice !== undefined && resellPrice > 0) {
+      const user = await User.findById(req.user.id);
+      const isReseller = user?.resellerApplication?.status === 'approved';
+      if (!isReseller) {
+        return next(new AppError('Only approved resellers can set a resell margin', 403));
+      }
+    }
 
     const cart = await Cart.findOne({ user: req.user.id });
     if (!cart) return next(new AppError('Cart not found', 404));

@@ -123,11 +123,11 @@ export const requestWithdrawal = async (req, res, next) => {
       return next(new AppError('Insufficient balance', 400));
     }
 
-    // Deduct from available balance, but DO NOT add to totalWithdrawn yet.
+    // Deduct from available balance immediately
     wallet.balance -= amount;
     await wallet.save();
 
-    // Create withdrawal record (optional)
+    // Create withdrawal record for admin processing
     const withdrawal = await Withdrawal.create({
       user: req.user.id,
       wallet: wallet._id,
@@ -135,9 +135,23 @@ export const requestWithdrawal = async (req, res, next) => {
       status: 'pending'
     });
 
+    // Create a transaction record so the user can see in their history why money was deducted
+    await WalletTransaction.create({
+      wallet: wallet._id,
+      user: req.user.id,
+      type: 'debit',
+      source: 'withdrawal',
+      amount,
+      balanceAfter: wallet.balance,
+      description: `Withdrawal Request (Pending Admin Approval)`,
+      referenceId: withdrawal._id,
+      referenceModel: 'Withdrawal',
+      status: 'pending'
+    });
+
     res.json({
       success: true,
-      message: 'Withdrawal processed',
+      message: 'Withdrawal request submitted successfully! Your balance has been updated.',
       data: { wallet, withdrawal }
     });
   } catch (error) {

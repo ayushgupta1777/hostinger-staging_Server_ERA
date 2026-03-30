@@ -503,25 +503,19 @@ export const processWithdrawal = async (req, res, next) => {
       withdrawal.utrNumber = utrNumber;
       withdrawal.completedAt = new Date();
 
-      // Update wallet
+      // Update wallet stats (balance was already deducted on request)
       const wallet = withdrawal.wallet;
       wallet.totalWithdrawn += withdrawal.amount;
       await wallet.save();
 
-      // Create transaction record for wallet completion
-      const WalletTransaction = require('../models/WalletTransaction.js').default;
-      await WalletTransaction.create({
-        wallet: wallet._id,
-        user: withdrawal.user._id,
-        type: 'debit',
-        source: 'withdrawal',
-        amount: withdrawal.amount,
-        balanceAfter: wallet.balance,
-        description: `Withdrawal to Bank (UTR: ${utrNumber})`,
-        referenceId: withdrawal._id,
-        referenceModel: 'Withdrawal',
-        status: 'completed'
-      });
+      // Update the existing transaction record from 'pending' to 'completed'
+      await WalletTransaction.findOneAndUpdate(
+        { referenceId: withdrawal._id, source: 'withdrawal' },
+        { 
+          status: 'completed',
+          description: `Withdrawal to Bank (UTR: ${utrNumber})`
+        }
+      );
 
       // Send notification
       await notificationService.sendNotification({
@@ -546,8 +540,13 @@ export const processWithdrawal = async (req, res, next) => {
       wallet.balance += withdrawal.amount;
       await wallet.save();
 
-      // Create transaction for rejection
-      const WalletTransaction = require('../models/WalletTransaction.js').default;
+      // Update the pending transaction to 'failed'
+      await WalletTransaction.findOneAndUpdate(
+        { referenceId: withdrawal._id, source: 'withdrawal' },
+        { status: 'failed', description: `Withdrawal Rejected: ${rejectionReason}` }
+      );
+
+      // Create a NEW 'Credit' transaction for the refund record
       await WalletTransaction.create({
         wallet: wallet._id,
         user: withdrawal.user._id,
@@ -555,7 +554,7 @@ export const processWithdrawal = async (req, res, next) => {
         source: 'refund',
         amount: withdrawal.amount,
         balanceAfter: wallet.balance,
-        description: `Withdrawal Rejected: ${rejectionReason}`,
+        description: `Refund: Withdrawal Rejected (${rejectionReason})`,
         referenceId: withdrawal._id,
         referenceModel: 'Withdrawal',
         status: 'completed'

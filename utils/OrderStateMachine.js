@@ -129,9 +129,9 @@ class OrderStateMachine {
         order.cancellationReason = metadata.reason;
         // Restore stock
         await this.restoreStock(order);
-        // Cancel reseller earnings
-        if (order.resellerEarningStatus === 'pending') {
-          order.resellerEarningStatus = 'cancelled';
+        // Reverse reseller earnings
+        if (order.resellerEarning > 0) {
+          await this.reverseResellerEarnings(order);
         }
         break;
 

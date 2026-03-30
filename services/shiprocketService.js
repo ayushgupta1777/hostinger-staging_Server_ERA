@@ -254,8 +254,6 @@ class ShiprocketService {
       weight: totalWeight
     };
 
-    console.log(`🚀 [Shiprocket] Payload for order ${order.orderNo}:`, JSON.stringify(shiprocketOrderData, null, 2));
-
     try {
       const response = await this.request('POST', '/orders/create/adhoc', shiprocketOrderData);
       console.log(`✅ [Shiprocket] Success for order ${order.orderNo}:`, JSON.stringify(response, null, 2));
@@ -266,9 +264,31 @@ class ShiprocketService {
         status: response.status
       };
     } catch (error) {
+      const srError = error.response?.data?.message || error.message;
+      const srData = error.response?.data;
+
+      // --- AUTO-RECOVERY: Wrong Pickup Location ---
+      if (srError.toLowerCase().includes('wrong pickup location') && srData?.data?.data?.length > 0) {
+        const correctLocation = srData.data.data[0].pickup_location;
+        console.warn(`⚠️ [Shiprocket] Auto-recovering: Changing pickup location from "${shiprocketOrderData.pickup_location}" to "${correctLocation}"`);
+        
+        // Update database for future orders
+        await ShiprocketSettings.updateOne({ isActive: true }, { $set: { defaultPickupName: correctLocation } });
+        
+        // Retry with the correct location
+        shiprocketOrderData.pickup_location = correctLocation;
+        const retryResponse = await this.request('POST', '/orders/create/adhoc', shiprocketOrderData);
+        console.log(`✅ [Shiprocket] Success after auto-recovery for ${order.orderNo}:`, JSON.stringify(retryResponse, null, 2));
+
+        return {
+          orderId: retryResponse.order_id,
+          shipmentId: retryResponse.shipment_id,
+          status: retryResponse.status
+        };
+      }
+
       console.error('❌ Shiprocket Create Order Error:', error.response?.data || error.message);
       // Extract specific error message from Shiprocket response if available
-      const srError = error.response?.data?.message || error.message;
       const srErrors = error.response?.data?.errors ? JSON.stringify(error.response.data.errors) : '';
       throw new AppError(`Shiprocket Error: ${srError} ${srErrors}`, error.response?.status || 500);
     }
