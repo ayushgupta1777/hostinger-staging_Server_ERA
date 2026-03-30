@@ -290,9 +290,10 @@ export const createShipment = async (req, res, next) => {
       }
     }
 
-    // Create shipment
+    // 1. Create order in Shiprocket
     const result = await shiprocketService.createOrder(order);
 
+    // 2. SAVE IMMEDIATELY - Even if AWB fails, we MUST have the reference
     order.shiprocket = {
       orderId: result.orderId,
       shipmentId: result.shipmentId
@@ -301,7 +302,7 @@ export const createShipment = async (req, res, next) => {
     // If Shiprocket accepted the order but didn't assign a shipment ID,
     // it means it's stuck in "NEW" status on their platform (often due to missing dimensions, categories, or channel settings)
     if (!result.shipmentId) {
-      await order.save(); // Save the orderId at least
+      await order.save();
       return res.status(200).json({
         success: true,
         message: 'Order created in Shiprocket (Status: NEW), but no Shipment ID was generated. Please log into Shiprocket to move it to "Ready to Ship".',
@@ -309,22 +310,41 @@ export const createShipment = async (req, res, next) => {
       });
     }
 
-    // Generate AWB ONLY if we have a valid shipment ID
-    const awbResult = await shiprocketService.generateAWB(result.shipmentId);
-    order.shiprocket.awb = awbResult.awb;
-    order.shiprocket.courierName = awbResult.courierName;
-    order.trackingNumber = awbResult.awb;
-    order.courierName = awbResult.courierName;
+    // Attempt subsequent automated steps, but catch locally to ensure order still saves
+    try {
+      // 3. Generate AWB
+      console.log(`[Shiprocket] Generating AWB for shipment: ${result.shipmentId}`);
+      const awbResult = await shiprocketService.generateAWB(result.shipmentId);
+      
+      order.shiprocket.awb = awbResult.awb;
+      order.shiprocket.courierName = awbResult.courierName;
+      order.trackingNumber = awbResult.awb;
+      order.courierName = awbResult.courierName;
 
-    // Schedule pickup
-    const pickupResult = await shiprocketService.schedulePickup(result.shipmentId);
-    order.shiprocket.pickupScheduledDate = pickupResult.pickupScheduledDate;
+      // 4. Schedule pickup
+      console.log(`[Shiprocket] Scheduling pickup for shipment: ${result.shipmentId}`);
+      const pickupResult = await shiprocketService.schedulePickup(result.shipmentId);
+      order.shiprocket.pickupScheduledDate = pickupResult.pickupScheduledDate;
+
+      // 5. Update Status
+      order.orderStatus = 'shipped';
+      order.shippedAt = new Date();
+      
+      console.log(`✅ [Shiprocket] Fully processed order ${order.orderNo}`);
+
+    } catch (subError) {
+      console.error(`⚠️ [Shiprocket] Partial success for ${order.orderNo}:`, subError.message);
+      // We don't re-throw here because the order IS created in Shiprocket.
+      // We want to return the saved shipment ID so the user can see it in admin.
+    }
 
     await order.save();
 
     res.json({
       success: true,
-      message: 'Shipment created successfully',
+      message: order.orderStatus === 'shipped' 
+        ? 'Shipment created and scheduled successfully' 
+        : 'Order created in Shiprocket, but AWB/Pickup failed. You can retry from the Shiprocket dashboard.',
       data: { order }
     });
   } catch (error) {

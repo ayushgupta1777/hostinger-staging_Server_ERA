@@ -59,15 +59,22 @@ class ShiprocketService {
       console.log(`[Shiprocket] Token successfully refreshed for ${settings.email}`);
       return this.token;
     } catch (error) {
-      const shiprocketError = error.response?.data;
+      const errorMsg = shiprocketError?.message || error.message;
+      const status = error.response?.status || 500;
+      
       console.error('[Shiprocket] Authentication Failure:', {
-        status: error.response?.status,
+        status,
         data: shiprocketError,
         message: error.message
       });
 
-      const errorMsg = shiprocketError?.message || 'Invalid email and password combination';
-      throw new AppError(`Shiprocket Login Failed: ${errorMsg}`, error.response?.status === 401 ? 401 : 500);
+      // Special guidance for 2FA or password issues
+      let userAdvice = '';
+      if (status === 401 || status === 403) {
+        userAdvice = ' Please check your credentials and ensure Two-Factor Authentication (2FA) is turned OFF in your Shiprocket account settings.';
+      }
+
+      throw new AppError(`Shiprocket Login Failed: ${errorMsg}.${userAdvice}`, status);
     }
   }
 
@@ -247,11 +254,11 @@ class ShiprocketService {
       weight: totalWeight
     };
 
-    console.log('🚀 Shiprocket Order Payload:', JSON.stringify(shiprocketOrderData, null, 2));
+    console.log(`🚀 [Shiprocket] Payload for order ${order.orderNo}:`, JSON.stringify(shiprocketOrderData, null, 2));
 
     try {
       const response = await this.request('POST', '/orders/create/adhoc', shiprocketOrderData);
-      console.log('✅ Shiprocket Order Created:', JSON.stringify(response, null, 2));
+      console.log(`✅ [Shiprocket] Success for order ${order.orderNo}:`, JSON.stringify(response, null, 2));
 
       return {
         orderId: response.order_id,
