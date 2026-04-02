@@ -51,6 +51,7 @@ export const createOrder = async (req, res, next) => {
 
     // Calculate totals
     const subtotal = cart.totalPrice;
+    const baseSubtotal = cart.items.reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
     let shipping = subtotal >= 500 ? 0 : 50;
     const taxRate = parseFloat(process.env.TAX_RATE) || 3;
     const tax = Math.round(subtotal * (taxRate / 100));
@@ -77,7 +78,7 @@ export const createOrder = async (req, res, next) => {
       }
 
       // Check min order amount
-      if (subtotal < coupon.minOrderAmount) {
+      if (baseSubtotal < coupon.minOrderAmount) {
         return next(new AppError(`Minimum order amount for this coupon is ₹${coupon.minOrderAmount}`, 400));
       }
 
@@ -89,7 +90,7 @@ export const createOrder = async (req, res, next) => {
 
       // Calculate discount
       if (coupon.discountType === 'percentage') {
-        appliedDiscount = (subtotal * coupon.discountAmount) / 100;
+        appliedDiscount = (baseSubtotal * coupon.discountAmount) / 100;
         if (coupon.maxDiscountAmount && appliedDiscount > coupon.maxDiscountAmount) {
           appliedDiscount = coupon.maxDiscountAmount;
         }
@@ -98,8 +99,8 @@ export const createOrder = async (req, res, next) => {
       }
 
       // Ensure discount doesn't exceed subtotal
-      if (appliedDiscount > subtotal) {
-        appliedDiscount = subtotal;
+      if (appliedDiscount > baseSubtotal) {
+        appliedDiscount = baseSubtotal;
       }
 
       appliedDiscount = Math.round(appliedDiscount);
