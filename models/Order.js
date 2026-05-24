@@ -126,7 +126,10 @@ const orderSchema = new mongoose.Schema({
 
   // Return Window
   returnWindow: { type: Number, default: 7 }, // days
-  returnWindowEndDate: Date
+  returnWindowEndDate: Date,
+
+  // Admin Hiding/Soft-delete
+  isHiddenFromAdmin: { type: Boolean, default: false }
 
 }, { timestamps: true });
 

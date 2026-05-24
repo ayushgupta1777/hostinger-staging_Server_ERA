@@ -7,7 +7,8 @@ import {
   getOrderStats,
   getOrderById,
   updateOrderStatus,
-  cancelOrder
+  cancelOrder,
+  hideOrder
 } from '../controllers/adminOrderController.js';
 
 const router = express.Router();
@@ -21,5 +22,6 @@ router.get('/orders/stats', getOrderStats);
 router.get('/orders/:orderId', getOrderById);
 router.put('/orders/:orderId/status', updateOrderStatus);
 router.put('/orders/:orderId/cancel', cancelOrder);
+router.put('/orders/:orderId/hide', hideOrder);
 
 export default router;

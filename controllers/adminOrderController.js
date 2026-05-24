@@ -9,10 +9,10 @@ import OrderStateMachine from '../utils/OrderStateMachine.js';
  */
 export const getAllOrders = async (req, res, next) => {
   try {
-    const { status, search, page = 1, limit = 20 } = req.query;
+    const { status, search, page = 1, limit = 20, timeframe, startDate: customStart, endDate: customEnd } = req.query;
 
     // Build query
-    const query = {};
+    const query = { isHiddenFromAdmin: { $ne: true } };
     if (status && status !== 'all') {
       query.orderStatus = status;
     }
@@ -21,6 +21,32 @@ export const getAllOrders = async (req, res, next) => {
         { orderNo: { $regex: search, $options: 'i' } },
         { 'user.name': { $regex: search, $options: 'i' } }
       ];
+    }
+
+    // Build date query/timeframe filtering in IST (UTC+5:30)
+    const now = new Date();
+    const istOffset = 330 * 60 * 1000; // 5.5 hours in milliseconds
+    const istTime = new Date(now.getTime() + istOffset);
+
+    if (timeframe === 'today') {
+      istTime.setUTCHours(0, 0, 0, 0);
+      const startOfDayIST = new Date(istTime.getTime() - istOffset);
+      query.createdAt = { $gte: startOfDayIST };
+    } else if (timeframe === 'week') {
+      istTime.setUTCHours(0, 0, 0, 0);
+      istTime.setUTCDate(istTime.getUTCDate() - 7);
+      const startOfWeekIST = new Date(istTime.getTime() - istOffset);
+      query.createdAt = { $gte: startOfWeekIST };
+    } else if (timeframe === 'month') {
+      istTime.setUTCHours(0, 0, 0, 0);
+      istTime.setUTCMonth(istTime.getUTCMonth() - 1);
+      const startOfMonthIST = new Date(istTime.getTime() - istOffset);
+      query.createdAt = { $gte: startOfMonthIST };
+    } else if (timeframe === 'custom' && customStart && customEnd) {
+      query.createdAt = {
+        $gte: new Date(customStart),
+        $lte: new Date(customEnd)
+      };
     }
 
     const skip = (page - 1) * limit;
@@ -60,25 +86,30 @@ export const getOrderStats = async (req, res, next) => {
   try {
     const { timeframe, startDate: customStart, endDate: customEnd } = req.query;
 
-    // Build date query
-    let dateQuery = {};
+    // Build date query in IST (UTC+5:30)
+    let dateQuery = { isHiddenFromAdmin: { $ne: true } };
     const now = new Date();
+    const istOffset = 330 * 60 * 1000; // 5.5 hours in milliseconds
+    const istTime = new Date(now.getTime() + istOffset);
 
     if (timeframe === 'today') {
-      const startOfDay = new Date(now.setHours(0, 0, 0, 0));
-      dateQuery = { createdAt: { $gte: startOfDay } };
+      istTime.setUTCHours(0, 0, 0, 0);
+      const startOfDayIST = new Date(istTime.getTime() - istOffset);
+      dateQuery.createdAt = { $gte: startOfDayIST };
     } else if (timeframe === 'week') {
-      const startOfWeek = new Date(now.setDate(now.getDate() - 7));
-      dateQuery = { createdAt: { $gte: startOfWeek } };
+      istTime.setUTCHours(0, 0, 0, 0);
+      istTime.setUTCDate(istTime.getUTCDate() - 7);
+      const startOfWeekIST = new Date(istTime.getTime() - istOffset);
+      dateQuery.createdAt = { $gte: startOfWeekIST };
     } else if (timeframe === 'month') {
-      const startOfMonth = new Date(now.setMonth(now.getMonth() - 1));
-      dateQuery = { createdAt: { $gte: startOfMonth } };
+      istTime.setUTCHours(0, 0, 0, 0);
+      istTime.setUTCMonth(istTime.getUTCMonth() - 1);
+      const startOfMonthIST = new Date(istTime.getTime() - istOffset);
+      dateQuery.createdAt = { $gte: startOfMonthIST };
     } else if (timeframe === 'custom' && customStart && customEnd) {
-      dateQuery = {
-        createdAt: {
-          $gte: new Date(customStart),
-          $lte: new Date(customEnd)
-        }
+      dateQuery.createdAt = {
+        $gte: new Date(customStart),
+        $lte: new Date(customEnd)
       };
     }
 
@@ -88,18 +119,18 @@ export const getOrderStats = async (req, res, next) => {
     const processingOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'processing' });
     const packedOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'packed' });
     const shippedOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'shipped' });
-    const deliveredOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'delivered' });
+    const deliveredOrders = await Order.countDocuments({ ...dateQuery, orderStatus: { $in: ['delivered', 'completed'] } });
     const cancelledOrders = await Order.countDocuments({ ...dateQuery, orderStatus: 'cancelled' });
 
-    // Calculate total revenue (only from delivered orders in timeframe)
+    // Calculate total revenue (only from delivered or completed orders in timeframe)
     const revenueResult = await Order.aggregate([
-      { $match: { ...dateQuery, orderStatus: 'delivered' } },
+      { $match: { ...dateQuery, orderStatus: { $in: ['delivered', 'completed'] } } },
       { $group: { _id: null, total: { $sum: '$total' } } }
     ]);
     const totalRevenue = revenueResult[0]?.total || 0;
 
     // Get recent orders (always last 5, regardless of timeframe)
-    const recentOrders = await Order.find()
+    const recentOrders = await Order.find({ isHiddenFromAdmin: { $ne: true } })
       .populate('user', 'name')
       .sort('-createdAt')
       .limit(5);
@@ -216,6 +247,30 @@ export const cancelOrder = async (req, res, next) => {
       success: true,
       message: 'Order cancelled',
       data: { order }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Hide order from admin dashboard (soft-delete)
+ * @route   PUT /api/admin/orders/:orderId/hide
+ * @access  Private (Admin)
+ */
+export const hideOrder = async (req, res, next) => {
+  try {
+    const order = await Order.findById(req.params.orderId);
+    if (!order) {
+      return next(new AppError('Order not found', 404));
+    }
+
+    order.isHiddenFromAdmin = true;
+    await order.save();
+
+    res.json({
+      success: true,
+      message: 'Order hidden from admin dashboard'
     });
   } catch (error) {
     next(error);
