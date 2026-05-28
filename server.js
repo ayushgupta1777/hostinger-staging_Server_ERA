@@ -253,11 +253,41 @@ app.get('/product/:productId', async (req, res) => {
     </div>
 
     <script>
-        // Auto-redirect Attempt
-        window.onload = function() {
-            // Attempt to open the app after a tiny delay
+        const appDeepLink = "${appDeepLink}";
+        const downloadUrl = "https://newrajfancy.adsngrow.in/";
+
+        // Function to attempt opening the app and fallback to download site if it fails
+        function openAppAndFallback(event) {
+            if (event) {
+                event.preventDefault();
+            }
+            
+            const start = Date.now();
+            window.location.href = appDeepLink;
+            
+            // If the app is not installed, redirect to download website after a delay
             setTimeout(function() {
-                window.location.href = "${appDeepLink}";
+                const elapsed = Date.now() - start;
+                // If the user was redirected to the app, the browser tab goes to the background/hidden.
+                // When they return, elapsed time will be much larger.
+                // document.hidden checks if the page is currently hidden.
+                if (document.hidden || document.webkitHidden || elapsed > 2500) {
+                    return;
+                }
+                window.location.href = downloadUrl;
+            }, 2000);
+        }
+
+        // Attach click handler to the "Open in App" button
+        document.getElementById('open-btn').addEventListener('click', openAppAndFallback);
+
+        // Auto-redirect Attempt on page load
+        window.onload = function() {
+            // Try to open the app automatically on load after a short delay.
+            // We do not auto-fallback on page load to allow users without the app
+            // can still view the product details on this landing page.
+            setTimeout(function() {
+                window.location.href = appDeepLink;
             }, 500);
         };
     </script>
