@@ -279,29 +279,14 @@ app.get('/product/:productId', async (req, res) => {
             flex-direction: column;
             align-items: center;
             margin-bottom: 24px;
-            gap: 8px;
-        }
-
-        .brand-logo {
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            border: 2px solid var(--gold-primary);
-            padding: 4px;
-            background: #000;
-            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
-            transition: var(--transition-smooth);
-        }
-
-        .brand-logo:hover {
-            transform: rotate(360deg);
+            gap: 4px;
         }
 
         .brand-title {
             font-family: 'Playfair Display', serif;
-            font-size: 1.5rem;
+            font-size: 1.8rem;
             font-weight: 700;
-            letter-spacing: 1.5px;
+            letter-spacing: 2.5px;
             color: var(--text-dark);
             text-transform: uppercase;
         }
@@ -510,7 +495,6 @@ app.get('/product/:productId', async (req, res) => {
 <body>
     <div class="container">
         <div class="brand-header">
-            <img src="https://newrajfancy.adsngrow.in/Logo_NRF.png" class="brand-logo" alt="New Raj Fancy" onerror="this.style.display='none'">
             <h1 class="brand-title">New Raj Fancy</h1>
         </div>
 
