@@ -61,7 +61,7 @@ export const getCategory = async (req, res, next) => {
       category: category._id,
       status: 'approved',
       isActive: true
-    }).limit(20);
+    }).limit(5000);
 
     res.json({
       success: true,

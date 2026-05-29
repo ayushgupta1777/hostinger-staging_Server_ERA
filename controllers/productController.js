@@ -15,7 +15,7 @@ import Category from '../models/Category.js';
  */
 export const getProducts = async (req, res, next) => {
   try {
-    const {
+    let {
       search,
       category,
       subcategory,
@@ -25,6 +25,13 @@ export const getProducts = async (req, res, next) => {
       page = 1,
       limit = 20
     } = req.query;
+
+    // Server-side override for old app client versions (3000+ active users)
+    // Older app versions hardcode limit=20 and page=1 with no infinite scroll pagination.
+    // Overriding limit to 5000 allows all products to load on existing client devices instantly.
+    if (category || subcategory) {
+      limit = 5000;
+    }
 
     // Build query
     const query = { status: 'approved', isActive: true };
