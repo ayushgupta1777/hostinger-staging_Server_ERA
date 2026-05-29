@@ -371,7 +371,7 @@ export const generateShareLink = async (req, res, next) => {
     }
 
     const referralCode = `${req.user.id.toString().slice(-6).toUpperCase()}-${productId.slice(-4)}`;
-    const baseUrl = process.env.FRONTEND_URL || 'https://yourapp.com';
+    const baseUrl = process.env.FRONTEND_URL || 'https://newrajfancystore.adsngrow.in';
     const shareLink = `${baseUrl}/product/${productId}?ref=${referralCode}&margin=${margin}`;
 
     const shareMessage = `

@@ -172,7 +172,7 @@ app.get('/product/:productId', async (req, res) => {
         <div style="text-align: center; padding: 50px; font-family: sans-serif;">
           <h1>Product Not Found</h1>
           <p>We couldn't find the product you're looking for.</p>
-          <a href="/" style="color: #4F46E5; text-decoration: none; font-weight: bold;">Return to Home</a>
+          <a href="/" style="color: #d4af37; text-decoration: none; font-weight: bold;">Return to Home</a>
         </div>
       `);
     }
@@ -206,6 +206,10 @@ app.get('/product/:productId', async (req, res) => {
     console.log(`Generated firstImage for product ${productId}: ${firstImage}`);
 
     const price = product.price ? `₹${product.price}` : '';
+    const mrp = product.mrp ? `₹${product.mrp}` : '';
+    const discount = (product.mrp && product.price && product.mrp > product.price)
+      ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
+      : 0;
     const productUrl = `https://newrajfancystore.adsngrow.in/product/${productId}`;
     const appDeepLink = `rajfancy://product/${productId}`;
 
@@ -228,67 +232,376 @@ app.get('/product/:productId', async (req, res) => {
     <!-- Smart Banner for iOS -->
     <meta name="apple-itunes-app" content="app-id=com.mobile, app-argument=${appDeepLink}">
 
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #F9FAFB; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: #111827; }
-        .card { background: white; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 32px; max-width: 400px; text-align: center; width: 90%; }
-        .product-img { width: 100%; border-radius: 12px; margin-bottom: 24px; aspect-ratio: 1; object-fit: cover; }
-        h1 { font-size: 22px; margin: 0 0 12px; }
-        .price { font-size: 24px; font-weight: bold; color: #4F46E5; margin-bottom: 16px; }
-        .desc { color: #6B7280; font-size: 14px; margin-bottom: 32px; line-height: 1.5; }
-        .btn { background: #4F46E5; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; display: block; transition: transform 0.2s; }
-        .btn:active { transform: scale(0.98); }
-        .footer-logo { margin-top: 24px; opacity: 0.5; font-size: 12px; }
+        :root {
+            --gold-primary: #d4af37;
+            --gold-light: #f2d06b;
+            --gold-dark: #b59223;
+            --bg-cream: #fffaf0;
+            --text-dark: #1a1a1a;
+            --text-muted: #5a5a5a;
+            --white: #ffffff;
+            --shadow-premium: 0 20px 40px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(212, 175, 55, 0.15);
+            --gold-gradient: linear-gradient(135deg, #d4af37 0%, #f2d06b 100%);
+            --transition-smooth: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background: linear-gradient(135deg, var(--bg-cream) 0%, #ffffff 100%);
+            color: var(--text-dark);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .brand-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 24px;
+            gap: 8px;
+        }
+
+        .brand-logo {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 2px solid var(--gold-primary);
+            padding: 4px;
+            background: #000;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
+            transition: var(--transition-smooth);
+        }
+
+        .brand-logo:hover {
+            transform: rotate(360deg);
+        }
+
+        .brand-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            color: var(--text-dark);
+            text-transform: uppercase;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            box-shadow: var(--shadow-premium);
+            padding: 24px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .image-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(212, 175, 55, 0.1);
+        }
+
+        .product-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: var(--transition-smooth);
+        }
+
+        .image-wrapper:hover .product-img {
+            transform: scale(1.05);
+        }
+
+        .discount-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--gold-gradient);
+            color: var(--white);
+            font-weight: 700;
+            font-size: 0.75rem;
+            padding: 6px 12px;
+            border-radius: 100px;
+            box-shadow: 0 4px 10px rgba(212, 175, 55, 0.3);
+            letter-spacing: 0.5px;
+        }
+
+        .product-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            line-height: 1.4;
+            margin-top: 8px;
+            padding: 0 8px;
+        }
+
+        .price-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+
+        .price-current {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--gold-dark);
+        }
+
+        .price-mrp {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            text-decoration: line-through;
+            opacity: 0.65;
+        }
+
+        .product-desc {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 12px;
+            padding: 0 12px;
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px 28px;
+            border-radius: 14px;
+            font-size: 1rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-primary {
+            background: var(--gold-gradient);
+            color: var(--white);
+            box-shadow: 0 10px 20px rgba(212, 175, 55, 0.25);
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -50%;
+            width: 200%;
+            height: 100%;
+            background: linear-gradient(
+                to right,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.3) 50%,
+                rgba(255, 255, 255, 0) 100%
+            );
+            transform: skewX(-25deg);
+            transition: 0.75s;
+            opacity: 0;
+        }
+
+        .btn-primary:hover::after {
+            left: 125%;
+            opacity: 1;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 28px rgba(212, 175, 55, 0.35);
+        }
+
+        .btn-primary:active {
+            transform: translateY(1px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--gold-dark);
+            border: 2px solid var(--gold-primary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(212, 175, 55, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary:active {
+            transform: translateY(1px);
+        }
+
+        .footer-logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            opacity: 0.4;
+            text-transform: uppercase;
+            margin-top: 16px;
+            color: var(--text-dark);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 16px;
+            }
+            .card {
+                padding: 20px;
+                border-radius: 20px;
+            }
+            .product-title {
+                font-size: 1.2rem;
+            }
+            .price-current {
+                font-size: 1.5rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="card">
-        <img src="${firstImage}" class="product-img" alt="${title}">
-        <h1>${title}</h1>
-        <div class="price">${price}</div>
-        <p class="desc">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</p>
-        
-        <a href="${appDeepLink}" class="btn" id="open-btn">Open in App</a>
-        
-        <div class="footer-logo">New Raj Fancy Store</div>
+    <div class="container">
+        <div class="brand-header">
+            <img src="https://newrajfancystore.adsngrow.in/logo.png" class="brand-logo" alt="New Raj Fancy">
+            <h1 class="brand-title">New Raj Fancy</h1>
+        </div>
+
+        <div class="card">
+            <div class="image-wrapper">
+                <img src="${firstImage}" class="product-img" alt="${title}">
+                ${discount > 0 ? `<span class="discount-badge">${discount}% OFF</span>` : ''}
+            </div>
+            
+            <h2 class="product-title">${title}</h2>
+            
+            <div class="price-container">
+                <span class="price-current">${price}</span>
+                ${mrp && mrp !== price ? `<span class="price-mrp">${mrp}</span>` : ''}
+            </div>
+            
+            <p class="product-desc">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</p>
+            
+            <div class="actions">
+                <a href="#" class="btn btn-primary" id="open-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    Open in App
+                </a>
+                <a href="https://newrajfancy.adsngrow.in/" class="btn btn-secondary" id="download-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Download App
+                </a>
+            </div>
+            
+            <div class="footer-logo">New Raj Fancy Store</div>
+        </div>
     </div>
 
     <script>
         const appDeepLink = "${appDeepLink}";
         const downloadUrl = "https://newrajfancy.adsngrow.in/";
+        const androidIntent = "intent://product/${productId}#Intent;scheme=rajfancy;package=com.newrajfancystore.app;S.browser_fallback_url=https://newrajfancy.adsngrow.in/;end";
 
-        // Function to attempt opening the app and fallback to download site if it fails
+        function getOS() {
+            const userAgent = window.navigator.userAgent || window.navigator.vendor || window.opera;
+            if (/android/i.test(userAgent)) {
+                return "Android";
+            }
+            if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                return "iOS";
+            }
+            return "Desktop";
+        }
+
         function openAppAndFallback(event) {
             if (event) {
                 event.preventDefault();
             }
             
-            const start = Date.now();
-            window.location.href = appDeepLink;
+            const os = getOS();
             
-            // If the app is not installed, redirect to download website after a delay
-            setTimeout(function() {
-                const elapsed = Date.now() - start;
-                // If the user was redirected to the app, the browser tab goes to the background/hidden.
-                // When they return, elapsed time will be much larger.
-                // document.hidden checks if the page is currently hidden.
-                if (document.hidden || document.webkitHidden || elapsed > 2500) {
-                    return;
-                }
+            if (os === "Android") {
+                // Android Chrome Intent handles everything natively:
+                // Opens the app if installed, or redirects to fallback URL (website) if not.
+                window.location.href = androidIntent;
+            } else if (os === "iOS") {
+                const start = Date.now();
+                window.location.href = appDeepLink;
+                
+                // If the app is not installed, Safari won't hide the browser.
+                // We redirect to download website after a delay.
+                setTimeout(function() {
+                    const elapsed = Date.now() - start;
+                    if (document.hidden || document.webkitHidden || elapsed > 2500) {
+                        return;
+                    }
+                    window.location.href = downloadUrl;
+                }, 2000);
+            } else {
+                // Desktop/other devices redirect to download page
                 window.location.href = downloadUrl;
-            }, 2000);
+            }
         }
 
-        // Attach click handler to the "Open in App" button
+        // Attach click handler to "Open in App" button
         document.getElementById('open-btn').addEventListener('click', openAppAndFallback);
 
-        // Auto-redirect Attempt on page load
+        // Auto-redirect Attempt on page load for Android only
+        // iOS auto-redirect is disabled to prevent annoying browser popup errors
         window.onload = function() {
-            // Try to open the app automatically on load after a short delay.
-            // We do not auto-fallback on page load to allow users without the app
-            // can still view the product details on this landing page.
-            setTimeout(function() {
-                window.location.href = appDeepLink;
-            }, 500);
+            const os = getOS();
+            if (os === "Android") {
+                setTimeout(function() {
+                    window.location.href = androidIntent;
+                }, 800);
+            }
         };
     </script>
 </body>
