@@ -510,7 +510,7 @@ app.get('/product/:productId', async (req, res) => {
 <body>
     <div class="container">
         <div class="brand-header">
-            <img src="https://newrajfancystore.adsngrow.in/logo.png" class="brand-logo" alt="New Raj Fancy">
+            <img src="https://newrajfancy.adsngrow.in/Logo_NRF.png" class="brand-logo" alt="New Raj Fancy" onerror="this.style.display='none'">
             <h1 class="brand-title">New Raj Fancy</h1>
         </div>
 
