@@ -514,7 +514,7 @@ app.get('/product/:productId', async (req, res) => {
             <p class="product-desc">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</p>
             
             <div class="actions">
-                <a href="#" class="btn btn-primary" id="open-btn">
+                <a href="${appDeepLink}" class="btn btn-primary" id="open-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                     Open in App
                 </a>
@@ -531,7 +531,6 @@ app.get('/product/:productId', async (req, res) => {
     <script>
         const appDeepLink = "${appDeepLink}";
         const downloadUrl = "https://newrajfancy.adsngrow.in/";
-        const androidIntent = "intent://product/${productId}#Intent;scheme=rajfancy;package=com.newrajfancystore.app;S.browser_fallback_url=https://newrajfancy.adsngrow.in/;end";
 
         function getOS() {
             const userAgent = window.navigator.userAgent || window.navigator.vendor || window.opera;
@@ -544,47 +543,32 @@ app.get('/product/:productId', async (req, res) => {
             return "Desktop";
         }
 
-        function openAppAndFallback(event) {
-            if (event) {
-                event.preventDefault();
-            }
-            
-            const os = getOS();
-            
-            if (os === "Android") {
-                // Android Chrome Intent handles everything natively:
-                // Opens the app if installed, or redirects to fallback URL (website) if not.
-                window.location.href = androidIntent;
-            } else if (os === "iOS") {
-                const start = Date.now();
-                window.location.href = appDeepLink;
-                
-                // If the app is not installed, Safari won't hide the browser.
-                // We redirect to download website after a delay.
-                setTimeout(function() {
-                    const elapsed = Date.now() - start;
-                    if (document.hidden || document.webkitHidden || elapsed > 2500) {
-                        return;
-                    }
-                    window.location.href = downloadUrl;
-                }, 2000);
-            } else {
-                // Desktop/other devices redirect to download page
+        // Attempt redirection to download page if the app fails to open
+        function triggerFallback() {
+            const start = Date.now();
+            setTimeout(function() {
+                const elapsed = Date.now() - start;
+                // If the app opened, the tab went to background (hidden).
+                // Do not redirect in that case.
+                if (document.hidden || document.webkitHidden || elapsed > 2500) {
+                    return;
+                }
                 window.location.href = downloadUrl;
-            }
+            }, 2000);
         }
 
-        // Attach click handler to "Open in App" button
-        document.getElementById('open-btn').addEventListener('click', openAppAndFallback);
+        // Attach click handler to "Open in App" button (no preventDefault to allow native custom scheme execution)
+        document.getElementById('open-btn').addEventListener('click', function(event) {
+            triggerFallback();
+        });
 
-        // Auto-redirect Attempt on page load for Android only
-        // iOS auto-redirect is disabled to prevent annoying browser popup errors
+        // Auto-redirect Attempt on page load for mobile users
         window.onload = function() {
             const os = getOS();
-            if (os === "Android") {
+            if (os === "Android" || os === "iOS") {
                 setTimeout(function() {
-                    window.location.href = androidIntent;
-                }, 800);
+                    window.location.href = appDeepLink;
+                }, 500);
             }
         };
     </script>
