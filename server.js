@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import express from 'express';
-import dotenv from 'dotenv';
 import cors from 'cors';
+// import dotenv from 'dotenv';
+
 import helmet from 'helmet';
 import morgan from 'morgan';
 import connectDB from './config/database.js';
@@ -43,9 +45,8 @@ import appSettingRoutes from './routes/appSettingRoutes.js';
 
 import developerRoutes from './routes/developerRoutes.js';
 
-// Load environment variables
-dotenv.config();
 
+// dotenv.config();
 // Initialize express app
 const app = express();
 
