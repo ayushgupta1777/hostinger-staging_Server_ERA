@@ -22,7 +22,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import chatRoutes from './routes/chatRoutes.js'; // NEW: Chat routes
-
+import aiAssistantRoutes from './routes/aiAssistantRoutes.js'; // AI ASSISTANT FEATURE
 import adminResellerRoutes from './routes/adminResellerRoutes.js';
 import returnRoutes from './routes/returnRoutes.js';
 import shiprocketRoutes from './routes/shiprocketRoutes.js';
@@ -136,7 +136,7 @@ app.use(
 
 app.use('/api/categories', categoryRoutes);
 app.use('/api/chat', chatRoutes); // NEW: Chat API mount
-
+app.use('/api/ai-assistant', aiAssistantRoutes); // AI ASSISTANT FEATURE
 app.use('/api/admin/resellers', adminResellerRoutes);
 app.use('/api/returns', returnRoutes);
 app.use('/api/shiprocket', shiprocketRoutes);
