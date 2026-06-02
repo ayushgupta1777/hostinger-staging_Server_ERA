@@ -1,11 +1,11 @@
-import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
 import Product from '../models/Product.js';
 
-let openai;
+let ai;
 try {
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 } catch (e) {
-    console.warn("[AI Vector Service] OpenAI API Key missing, AI features will fail.");
+    console.warn("[AI Vector Service] Gemini API Key missing, AI features will fail.");
 }
 
 // In-memory vector store for demo purposes (avoids needing Atlas Vector Index setup)
@@ -38,13 +38,13 @@ async function initializeMockVectorStore() {
 
         for (const product of products) {
             const textToEmbed = `${product.title} ${product.description || ''} ${product.category?.name || ''}`;
-            const response = await openai.embeddings.create({
-                model: "text-embedding-3-small",
-                input: textToEmbed,
+            const response = await ai.models.embedContent({
+                model: "gemini-embedding-001",
+                contents: textToEmbed,
             });
             mockVectorStore.push({
                 product,
-                embedding: response.data[0].embedding
+                embedding: response.embeddings[0].values
             });
         }
         console.log(`[AI Vector Service] Embedded ${mockVectorStore.length} products successfully.`);
@@ -63,11 +63,11 @@ export const searchProductsSemantically = async (query) => {
 
     try {
         // 1. Embed the query
-        const response = await openai.embeddings.create({
-            model: "text-embedding-3-small",
-            input: query,
+        const response = await ai.models.embedContent({
+            model: "gemini-embedding-001",
+            contents: query,
         });
-        const queryEmbedding = response.data[0].embedding;
+        const queryEmbedding = response.embeddings[0].values;
 
         // 2. Perform Cosine Similarity Search
         const results = mockVectorStore.map(item => ({
