@@ -6,7 +6,8 @@ import { AppError } from '../middleware/errorHandler.js';
 import {
   getProfile,
   updateProfile,
-  changePassword
+  changePassword,
+  deleteAccount
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -127,5 +128,12 @@ router.delete('/addresses/:id', protect, async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * @desc    Delete user account and data
+ * @route   DELETE /api/users/account
+ * @access  Private
+ */
+router.delete('/account', protect, deleteAccount);
 
 export default router;
