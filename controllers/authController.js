@@ -66,7 +66,8 @@ export const register = async (req, res, next) => {
         password: password || undefined,
         phone: actualPhone || undefined,
         role: role || 'customer',
-        emailVerified: !!googleId // If from google, email is verified
+        emailVerified: !!googleId, // If from google, email is verified
+        fcmToken: req.body.fcmToken || undefined
       });
     }
 
@@ -143,8 +144,11 @@ export const login = async (req, res, next) => {
       return next(new AppError('Account is deactivated', 401));
     }
 
-    // Update last login
+    // Update last login and fcmToken
     user.lastLoginAt = new Date();
+    if (req.body.fcmToken) {
+      user.fcmToken = req.body.fcmToken;
+    }
     await user.save();
 
     // Generate token
