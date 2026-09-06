@@ -6,6 +6,7 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import Order from '../models/Order.js';
 import { AppError } from '../middleware/errorHandler.js';
+import NotificationService from '../services/notificationService.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -246,6 +247,26 @@ export const verifyPayment = async (req, res, next) => {
     // Populate order for response
     await order.populate('items.product', 'title images');
 
+    // Send notification
+    try {
+      await NotificationService.sendNotification({
+        user: order.user,
+        type: 'payment_success',
+        title: 'Payment Successful ✅',
+        message: `Your payment of ₹${order.total} for order #${order.orderNo} was successful.`,
+        data: {
+          orderId: order._id.toString(),
+          orderNo: order.orderNo,
+          amount: order.total,
+          paymentId: razorpay_payment_id
+        },
+        referenceId: order._id,
+        referenceModel: 'Order'
+      });
+    } catch (notifErr) {
+      console.error('Failed to send payment success notification:', notifErr);
+    }
+
     res.json({
       success: true,
       message: 'Payment verified successfully',
@@ -280,6 +301,25 @@ export const handlePaymentFailure = async (req, res, next) => {
         console.log('📝 Payment failure recorded in order');
       } else {
         console.log('⚠️ Order already has completed payment, not updating to failed');
+      }
+
+      // Send payment failed notification
+      try {
+        await NotificationService.sendNotification({
+          user: order.user,
+          type: 'payment_failed',
+          title: 'Payment Failed ❌',
+          message: `Your payment for order #${order.orderNo} failed or was cancelled.`,
+          data: {
+            orderId: order._id.toString(),
+            orderNo: order.orderNo,
+            error: error || 'Payment failed'
+          },
+          referenceId: order._id,
+          referenceModel: 'Order'
+        });
+      } catch (notifErr) {
+        console.error('Failed to send payment failure notification:', notifErr);
       }
     }
 

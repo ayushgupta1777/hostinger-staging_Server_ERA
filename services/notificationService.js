@@ -3,8 +3,30 @@
 // Complete Notification System
 // ============================================
 import nodemailer from 'nodemailer';
+import admin from 'firebase-admin';
+import path from 'path';
+import fs from 'fs';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import AppSetting from '../models/AppSetting.js';
+
+// Global initialization for Firebase Admin
+try {
+  const serviceAccountPath = path.resolve(process.cwd(), 'config/firebase-service-account.json');
+  if (fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('🔥 Firebase Admin initialized successfully');
+    }
+  } else {
+    console.warn('⚠️ Firebase Admin service account not found at config/firebase-service-account.json');
+  }
+} catch (error) {
+  console.warn('⚠️ Firebase Admin initialization failed:', error.message);
+}
 
 class NotificationService {
   constructor() {
@@ -77,33 +99,43 @@ class NotificationService {
    * Send push notification
    */
   async sendPushNotification(user, notification) {
-    // Implement Firebase Cloud Messaging or your push service
-    // This is a placeholder for the actual implementation
-    
-    if (!user.fcmToken) {
-      throw new Error('No FCM token available');
+    // 1. Check if push notifications are enabled globally
+    const isEnabledSetting = await AppSetting.findOne({ key: 'push_notifications_enabled' });
+    if (!isEnabledSetting || isEnabledSetting.value !== true) {
+      console.log('🔇 Push notifications are disabled by the developer switch.');
+      return false;
     }
 
-    // Example FCM implementation:
-    /*
-    const admin = require('firebase-admin');
-    
-    await admin.messaging().send({
-      token: user.fcmToken,
-      notification: {
-        title: notification.title,
-        body: notification.message
-      },
-      data: {
-        type: notification.type,
-        referenceId: notification.referenceId || '',
-        ...notification.data
-      }
-    });
-    */
+    if (!user.fcmToken) {
+      console.log('🔇 No FCM token available for user:', user.email);
+      return false; // Fail gracefully instead of throwing
+    }
 
-    console.log('📱 Push notification sent:', notification.title);
-    return true;
+    if (!admin.apps.length) {
+      console.error('❌ Firebase Admin is not initialized. Cannot send push notification.');
+      return false;
+    }
+
+    try {
+      const response = await admin.messaging().send({
+        token: user.fcmToken,
+        notification: {
+          title: notification.title,
+          body: notification.message
+        },
+        data: {
+          type: notification.type || 'system',
+          referenceId: notification.referenceId ? String(notification.referenceId) : '',
+          ...(notification.data && typeof notification.data === 'object' ? 
+              Object.fromEntries(Object.entries(notification.data).map(([k, v]) => [k, String(v)])) : {})
+        }
+      });
+      console.log('📱 Push notification sent successfully to', user.email, 'Message ID:', response);
+      return true;
+    } catch (error) {
+      console.error('❌ FCM Push Notification Error:', error);
+      throw error;
+    }
   }
 
   /**
