@@ -67,3 +67,4 @@ out/
 # Untracked test files
 test_advanced_security.js
 utils/pricing.test.js
+config/firebase-service-account.json
