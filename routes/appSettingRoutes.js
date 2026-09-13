@@ -8,8 +8,8 @@ const router = express.Router();
 router.get('/', getSettings);
 router.get('/:key', getSettingByKey);
 
-// Only admins can update settings
-router.put('/', protect, authorize('admin'), updateSetting);
-router.post('/release-update', protect, authorize('admin'), releaseUpdate);
+// Admins and developers can update settings
+router.put('/', protect, authorize('admin', 'developer'), updateSetting);
+router.post('/release-update', protect, authorize('admin', 'developer'), releaseUpdate);
 
 export default router;
