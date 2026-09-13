@@ -10,9 +10,14 @@ import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import AppSetting from '../models/AppSetting.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Global initialization for Firebase Admin
 try {
-  const serviceAccountPath = path.resolve(process.cwd(), 'config/firebase-service-account.json');
+  const serviceAccountPath = path.resolve(__dirname, '../config/firebase-service-account.json');
   if (fs.existsSync(serviceAccountPath)) {
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
     if (!admin.apps.length) {
