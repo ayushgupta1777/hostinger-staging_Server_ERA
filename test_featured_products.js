@@ -47,6 +47,7 @@ const testFeaturedProducts = async () => {
         let successCount = 0;
         let failCount = 0;
 
+        
         for (const pd of testProducts) {
              // Mocking the validation logic that is inside the controller
              const featuredCount = await Product.countDocuments({ isFeatured: true });
