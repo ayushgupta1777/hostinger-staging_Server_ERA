@@ -172,3 +172,36 @@ export const clearReadNotifications = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * @desc    Broadcast notification to all users
+ * @route   POST /api/admin/notifications/broadcast
+ * @access  Private/Admin
+ */
+export const broadcastNotification = async (req, res, next) => {
+  try {
+    const { title, message, data } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({ success: false, message: 'Title and message are required' });
+    }
+
+    const NotificationService = (await import('../services/notificationService.js')).default;
+    
+    const result = await NotificationService.broadcastPushNotification(title, message, data);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `Broadcast completed. Sent: ${result.count}, Failed: ${result.failed || 0}`
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: result.message || 'Failed to broadcast notification'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};

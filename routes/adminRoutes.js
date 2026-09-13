@@ -10,11 +10,12 @@ import {
   cancelOrder,
   hideOrder
 } from '../controllers/adminOrderController.js';
+import { broadcastNotification } from '../controllers/notificationController.js';
 
 const router = express.Router();
 
-// Protect all routes and require admin role
-router.use(protect, authorize('admin'));
+// Protect all routes and require admin or developer role
+router.use(protect, authorize('admin', 'developer'));
 
 // Order routes
 router.get('/orders', getAllOrders);
@@ -23,5 +24,8 @@ router.get('/orders/:orderId', getOrderById);
 router.put('/orders/:orderId/status', updateOrderStatus);
 router.put('/orders/:orderId/cancel', cancelOrder);
 router.put('/orders/:orderId/hide', hideOrder);
+
+// Notification routes
+router.post('/notifications/broadcast', broadcastNotification);
 
 export default router;

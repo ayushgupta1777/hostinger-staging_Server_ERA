@@ -441,6 +441,50 @@ class NotificationService {
       html: emailContent
     });
   }
+
+  /**
+   * Broadcast push notification to all users
+   */
+  async broadcastPushNotification(title, message, data = {}) {
+    try {
+      if (!admin.apps.length) {
+        console.warn('Firebase not initialized. Skipping broadcast.');
+        return { success: false, message: 'Firebase not initialized' };
+      }
+
+      // Fetch all unique FCM tokens from users who have it set
+      const usersWithTokens = await User.find({ fcmToken: { $exists: true, $ne: null, $not: /^\s*$/ } }).select('fcmToken');
+      const tokens = usersWithTokens.map(u => u.fcmToken);
+
+      if (tokens.length === 0) {
+        return { success: true, count: 0, message: 'No valid tokens found' };
+      }
+
+      // Firebase limits multicast to 500 tokens per batch
+      let successCount = 0;
+      let failureCount = 0;
+      
+      const payload = {
+        notification: { title, body: message },
+        data
+      };
+
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
+        const batchTokens = tokens.slice(i, i + BATCH_SIZE);
+        payload.tokens = batchTokens;
+        const response = await admin.messaging().sendEachForMulticast(payload);
+        successCount += response.successCount;
+        failureCount += response.failureCount;
+      }
+
+      console.log(`Broadcast completed: ${successCount} sent, ${failureCount} failed.`);
+      return { success: true, count: successCount, failed: failureCount };
+    } catch (error) {
+      console.error('Broadcast notification error:', error);
+      return { success: false, message: error.message };
+    }
+  }
 }
 
 export default new NotificationService();
