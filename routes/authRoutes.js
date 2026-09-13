@@ -8,7 +8,10 @@ import {
   getMe,
   updateProfile,
   changePassword,
-  logout
+  logout,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword
 } from '../controllers/authController.js';
 import { protect } from '../middleware/auth.js';
 import { registerValidation, loginValidation, validate } from '../middleware/validation.js';
@@ -24,6 +27,11 @@ router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
 router.put('/password', protect, changePassword);
+
+// Password Reset Routes
+router.post('/forgot-password', authLimiter, forgotPassword);
+router.post('/verify-reset-otp', authLimiter, verifyResetOtp);
+router.post('/reset-password', authLimiter, resetPassword);
 
 /**
  * @desc    Upload user avatar

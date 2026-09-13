@@ -288,3 +288,96 @@ export const logout = async (req, res, next) => {
     next(error);
   }
 };
+
+
+/**
+ * @desc    Forgot Password - Send OTP
+ * @route   POST /api/auth/forgot-password
+ * @access  Public
+ */
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return next(new AppError('No user found with that email address', 404));
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    user.resetPasswordOtp = otp;
+    user.resetPasswordExpires = expires;
+    await user.save();
+
+    const NotificationService = (await import('../services/notificationService.js')).default;
+    await NotificationService.sendPasswordResetOtp(user, otp);
+
+    res.json({
+      success: true,
+      message: 'OTP sent to email'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Verify Reset OTP
+ * @route   POST /api/auth/verify-reset-otp
+ * @access  Public
+ */
+export const verifyResetOtp = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+    const user = await User.findOne({ 
+      email,
+      resetPasswordOtp: otp,
+      resetPasswordExpires: { $gt: Date.now() }
+    }).select('+resetPasswordOtp +resetPasswordExpires');
+
+    if (!user) {
+      return next(new AppError('Invalid or expired OTP', 400));
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP verified successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Reset Password
+ * @route   POST /api/auth/reset-password
+ * @access  Public
+ */
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    const user = await User.findOne({ 
+      email,
+      resetPasswordOtp: otp,
+      resetPasswordExpires: { $gt: Date.now() }
+    }).select('+password +resetPasswordOtp +resetPasswordExpires');
+
+    if (!user) {
+      return next(new AppError('Invalid or expired OTP', 400));
+    }
+
+    user.password = newPassword;
+    user.resetPasswordOtp = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -448,6 +448,59 @@ class NotificationService {
   }
 
   /**
+   * Send Password Reset OTP
+   */
+  async sendPasswordResetOtp(user, otp) {
+    if (!user.email) return;
+
+    const emailContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 650px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { padding: 30px; background: #f9fafb; border: 1px solid #eee; border-radius: 0 0 8px 8px; }
+          .otp-box { background: #fff; border: 2px dashed #4F46E5; color: #4F46E5; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; margin: 30px 0; letter-spacing: 5px; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h2>Password Reset Request</h2>
+          </div>
+          <div class="content">
+            <p>Hi ${user.name},</p>
+            <p>We received a request to reset your password. Use the OTP below to proceed. This code is valid for 10 minutes.</p>
+            
+            <div class="otp-box">${otp}</div>
+            
+            <p>If you didn't request a password reset, please ignore this email or contact support if you have concerns.</p>
+            <br>
+            <p>Thanks,<br>The ${process.env.APP_NAME} Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await this.emailTransporter.sendMail({
+        from: `"${process.env.APP_NAME}" <${process.env.SMTP_FROM}>`,
+        to: user.email,
+        subject: `Your Password Reset Code`,
+        html: emailContent
+      });
+      console.log(`Password reset OTP sent to ${user.email}`);
+    } catch (error) {
+      console.error('Error sending password reset OTP:', error);
+      throw new Error('Failed to send OTP email');
+    }
+  }
+
+  /**
    * Broadcast push notification to all users
    */
   async broadcastPushNotification(title, message, data = {}) {
