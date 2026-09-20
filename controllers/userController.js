@@ -180,36 +180,17 @@ export const deleteAccount = async (req, res, next) => {
 };
 
 /**
- * @desc    Generate OTP for public account deletion
+ * @desc    Generate Verification Link for public account deletion using Firebase
  * @route   POST /api/users/public-delete-otp
  * @access  Public
  */
 export const publicDeleteOtp = async (req, res, next) => {
   try {
-    const { email } = req.body;
-    if (!email) {
-      return next(new AppError('Email is required', 400));
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      // Do not reveal if the account exists or not for security
-      return res.json({ success: true, message: 'If the email exists, an OTP has been sent.' });
-    }
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-    user.accountDeletionOtp = otp;
-    user.accountDeletionExpires = expires;
-    await user.save();
-
-    const NotificationService = (await import('../services/notificationService.js')).default;
-    await NotificationService.sendDeleteAccountOtp(user, otp);
-
+    // The frontend Firebase Client SDK handles sending the email link now.
+    // This endpoint remains as a placeholder to avoid breaking any legacy clients.
     res.json({
       success: true,
-      message: 'If the email exists, an OTP has been sent.'
+      message: 'If the email exists, a verification link has been sent.'
     });
   } catch (error) {
     next(error);
@@ -217,27 +198,39 @@ export const publicDeleteOtp = async (req, res, next) => {
 };
 
 /**
- * @desc    Verify OTP and delete account for public request
+ * @desc    Verify Firebase ID Token and delete account for public request
  * @route   POST /api/users/public-delete-verify
  * @access  Public
  */
 export const publicDeleteVerify = async (req, res, next) => {
   try {
-    const { email, otp } = req.body;
-    if (!email || !otp) {
-      return next(new AppError('Email and OTP are required', 400));
+    const { token } = req.body;
+    if (!token) {
+      return next(new AppError('Firebase ID token is required', 400));
     }
 
-    const user = await User.findOne({ 
-      email,
-      accountDeletionOtp: otp,
-      accountDeletionExpires: { $gt: Date.now() }
-    }).select('+accountDeletionOtp +accountDeletionExpires');
+    const admin = (await import('firebase-admin')).default;
 
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (err) {
+      return next(new AppError('Invalid or expired Firebase token', 401));
+    }
+
+    const verifiedEmail = decodedToken.email;
+    if (!verifiedEmail) {
+      return next(new AppError('Token does not contain an email', 400));
+    }
+
+    // Connect the securely verified email from Firebase Auth to our MongoDB source of truth
+    const user = await User.findOne({ email: verifiedEmail });
+    
     if (!user) {
-      return next(new AppError('Invalid or expired OTP', 400));
+      return next(new AppError('User not found in our database.', 404));
     }
 
+    // The user has proven ownership of the email associated with the MongoDB user.
     await executeAccountDeletion(user._id);
 
     res.json({

@@ -775,8 +775,76 @@ app.get('/delete-account', (req, res) => {
         </div>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script>
-        let currentEmail = '';
+        // Initialize Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDGXR-RTuIad8wnwKO0hZXTpiIP66DT8r0",
+            authDomain: "new-raj-fancy-store.firebaseapp.com",
+            projectId: "new-raj-fancy-store"
+        };
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+
+        // Action Code Settings for Firebase Email Link
+        const actionCodeSettings = {
+            url: window.location.href.split('?')[0], // The current URL without query params
+            handleCodeInApp: true,
+        };
+
+        window.onload = async function() {
+            // Check if user is returning from the email link
+            if (firebase.auth().isSignInWithEmailLink(window.location.href)) {
+                let email = window.localStorage.getItem('emailForSignIn');
+                
+                // If missing, prompt user for email
+                if (!email) {
+                    email = window.prompt('Please provide your email for confirmation');
+                }
+                
+                if (email) {
+                    document.getElementById('email-step').style.display = 'none';
+                    document.getElementById('otp-step').innerHTML = '<h2>Verifying Link...</h2><p>Please wait while we securely process your deletion request.</p><div id="otp-error" class="error-msg"></div>';
+                    document.getElementById('otp-step').style.display = 'block';
+                    
+                    const errorDiv = document.getElementById('otp-error');
+                    
+                    try {
+                        // Sign in with the email link
+                        const result = await firebase.auth().signInWithEmailLink(email, window.location.href);
+                        
+                        // Clear email from storage
+                        window.localStorage.removeItem('emailForSignIn');
+                        
+                        // Get the ID Token
+                        const idToken = await result.user.getIdToken();
+                        
+                        // Send ID Token to our backend
+                        const response = await fetch('/api/users/public-delete-verify', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: idToken })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            document.getElementById('otp-step').style.display = 'none';
+                            document.getElementById('success-step').style.display = 'block';
+                        } else {
+                            errorDiv.innerText = data.message || 'Account deletion failed.';
+                            errorDiv.style.display = 'block';
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        errorDiv.innerText = err.message || 'Error signing in with email link. The link may have expired.';
+                        errorDiv.style.display = 'block';
+                    }
+                }
+            }
+        };
 
         async function requestOtp() {
             const emailInput = document.getElementById('email').value.trim();
@@ -790,54 +858,26 @@ app.get('/delete-account', (req, res) => {
             }
 
             try {
-                const response = await fetch('/api/users/public-delete-otp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: emailInput })
-                });
+                // Save email to localStorage so it can be retrieved after clicking the link
+                window.localStorage.setItem('emailForSignIn', emailInput);
                 
-                const data = await response.json();
+                // Send the email link using Firebase Client SDK
+                await firebase.auth().sendSignInLinkToEmail(emailInput, actionCodeSettings);
                 
-                // Always move to next step to prevent email enumeration
-                currentEmail = emailInput;
+                // The frontend handled sending the email, so we don't strictly need to hit the backend OTP endpoint.
+                // But if the backend relies on recording the intent or preventing spam, we could call it here.
+                
                 document.getElementById('email-step').style.display = 'none';
+                document.getElementById('otp-step').innerHTML = '<h2>Check Your Email</h2><p>A secure verification link has been sent to your email. Click the link to permanently delete your account.</p><p>You can close this tab.</p>';
                 document.getElementById('otp-step').style.display = 'block';
 
             } catch (err) {
-                errorDiv.innerText = 'Something went wrong. Please try again.';
-                errorDiv.style.display = 'block';
-            }
-        }
-
-        async function verifyAndDelete() {
-            const otpInput = document.getElementById('otp').value.trim();
-            const errorDiv = document.getElementById('otp-error');
-            errorDiv.style.display = 'none';
-
-            if (!otpInput || otpInput.length < 6) {
-                errorDiv.innerText = 'Please enter a valid 6-digit OTP.';
-                errorDiv.style.display = 'block';
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/users/public-delete-verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: currentEmail, otp: otpInput })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    document.getElementById('otp-step').style.display = 'none';
-                    document.getElementById('success-step').style.display = 'block';
+                console.error(err);
+                if (err.code === 'auth/operation-not-allowed') {
+                    errorDiv.innerText = 'Email link authentication is disabled. Please enable it in Firebase Console.';
                 } else {
-                    errorDiv.innerText = data.message || 'Invalid or expired OTP.';
-                    errorDiv.style.display = 'block';
+                    errorDiv.innerText = 'Failed to send verification email. Please try again.';
                 }
-            } catch (err) {
-                errorDiv.innerText = 'Something went wrong. Please try again.';
                 errorDiv.style.display = 'block';
             }
         }
