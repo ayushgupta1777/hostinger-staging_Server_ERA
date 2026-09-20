@@ -5,6 +5,7 @@
 import Review from '../models/Review.js';
 import Product from '../models/Product.js';
 import Order from '../models/Order.js';
+import mongoose from 'mongoose';
 
 export const getProductReviews = async (req, res, next) => {
   try {
@@ -85,7 +86,7 @@ export const createReview = async (req, res, next) => {
 
     // Update product average rating
     const stats = await Review.aggregate([
-      { $match: { product: productId } },
+      { $match: { product: new mongoose.Types.ObjectId(productId) } },
       { $group: {
         _id: null,
         avgRating: { $avg: '$rating' },
