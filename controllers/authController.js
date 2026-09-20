@@ -127,14 +127,14 @@ export const login = async (req, res, next) => {
     } else if (password) {
       // Option 2: Email + Password Login
       user = await User.findOne({ email }).select('+password');
-      if (!user) return next(new AppError('Invalid credentials', 401));
+      if (!user) return next(new AppError('User does not exist. Please sign up first.', 404));
 
       if (!user.password) {
         return next(new AppError('Please continue with Google or reset your password to login.', 401));
       }
 
       const isPasswordMatch = await user.comparePassword(password);
-      if (!isPasswordMatch) return next(new AppError('Invalid credentials', 401));
+      if (!isPasswordMatch) return next(new AppError('Incorrect password. Please try again.', 401));
     } else {
       return next(new AppError('Please provide password or continue with Google', 400));
     }
