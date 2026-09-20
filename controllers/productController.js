@@ -128,13 +128,33 @@ export const getProducts = async (req, res, next) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // Execute query
-    const products = await Product.find(query)
+    let products = await Product.find(query)
       .populate('category', 'name slug image')
       .populate('subcategory', 'name slug image parent')
       .populate('vendor', 'storeName')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
+
+    // SERVER-SIDE OVERRIDE FOR OLD APP VERSIONS (TOP RATED INJECTION)
+    // If this is the home screen general fetch (page 1, no strict filters)
+    if (page == 1 && !search && !category && !subcategory && !minPrice && !maxPrice) {
+      const topRated = await Product.find({ status: 'approved', isActive: true, averageRating: { $gt: 0 } })
+        .populate('category', 'name slug image')
+        .populate('subcategory', 'name slug image parent')
+        .populate('vendor', 'storeName')
+        .sort('-averageRating -createdAt')
+        .limit(5);
+        
+      if (topRated.length > 0) {
+        // Remove the top rated products from the original newest array to avoid duplicates
+        const topRatedIds = topRated.map(p => p._id.toString());
+        const filteredNewest = products.filter(p => !topRatedIds.includes(p._id.toString()));
+        
+        // Combine them so they definitely make the 20-limit cutoff for the frontend array
+        products = [...topRated, ...filteredNewest].slice(0, parseInt(limit));
+      }
+    }
 
     // Get total count
     const total = await Product.countDocuments(query);
