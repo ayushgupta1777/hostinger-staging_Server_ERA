@@ -7,7 +7,9 @@ import {
   getProfile,
   updateProfile,
   changePassword,
-  deleteAccount
+  deleteAccount,
+  publicDeleteOtp,
+  publicDeleteVerify
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -135,5 +137,19 @@ router.delete('/addresses/:id', protect, async (req, res, next) => {
  * @access  Private
  */
 router.delete('/account', protect, deleteAccount);
+
+/**
+ * @desc    Generate OTP for public account deletion
+ * @route   POST /api/users/public-delete-otp
+ * @access  Public
+ */
+router.post('/public-delete-otp', publicDeleteOtp);
+
+/**
+ * @desc    Verify OTP and delete account for public request
+ * @route   POST /api/users/public-delete-verify
+ * @access  Public
+ */
+router.post('/public-delete-verify', publicDeleteVerify);
 
 export default router;

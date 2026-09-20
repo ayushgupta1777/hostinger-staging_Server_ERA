@@ -582,6 +582,503 @@ app.get('/product/:productId', async (req, res) => {
   }
 });
 
+// External Account Deletion Page
+app.get('/delete-account', (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Account | New Raj Fancy Store</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold-primary: #d4af37;
+            --gold-dark: #b59223;
+            --bg-cream: #fffaf0;
+            --text-dark: #1a1a1a;
+            --text-muted: #5a5a5a;
+            --white: #ffffff;
+            --shadow-premium: 0 20px 40px rgba(0, 0, 0, 0.06);
+            --danger: #e53e3e;
+            --danger-hover: #c53030;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, var(--bg-cream) 0%, #ffffff 100%);
+            color: var(--text-dark);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            box-shadow: var(--shadow-premium);
+            padding: 32px;
+        }
+
+        .brand-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .brand-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-size: 1.4rem;
+            margin-bottom: 12px;
+            text-align: center;
+            color: var(--danger);
+        }
+
+        p {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        input:focus {
+            border-color: var(--gold-primary);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .btn-primary {
+            background: var(--gold-primary);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            background: var(--gold-dark);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: var(--white);
+        }
+
+        .btn-danger:hover {
+            background: var(--danger-hover);
+        }
+
+        #otp-step, #success-step {
+            display: none;
+        }
+
+        .error-msg {
+            color: var(--danger);
+            font-size: 0.85rem;
+            margin-top: 8px;
+            display: none;
+            text-align: center;
+        }
+
+        .success-icon {
+            font-size: 48px;
+            text-align: center;
+            color: #38a169;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="brand-header">
+            <h1 class="brand-title">New Raj Fancy</h1>
+        </div>
+
+        <!-- Step 1: Request OTP -->
+        <div id="email-step">
+            <h2>Delete Your Account</h2>
+            <p>Enter your registered email address. We will send an OTP to verify your request.</p>
+            
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" placeholder="e.g. yourname@email.com" required>
+            </div>
+            
+            <button class="btn btn-danger" onclick="requestOtp()">Send Verification OTP</button>
+            <div id="email-error" class="error-msg"></div>
+        </div>
+
+        <!-- Step 2: Verify OTP & Delete -->
+        <div id="otp-step">
+            <h2>Verify Request</h2>
+            <p>An OTP has been sent to your email. Enter it below to permanently delete your account.</p>
+            
+            <div class="form-group">
+                <label for="otp">Enter 6-digit OTP</label>
+                <input type="text" id="otp" placeholder="XXXXXX" maxlength="6" required>
+            </div>
+            
+            <button class="btn btn-danger" onclick="verifyAndDelete()">Confirm Deletion</button>
+            <div id="otp-error" class="error-msg"></div>
+        </div>
+
+        <!-- Step 3: Success -->
+        <div id="success-step">
+            <div class="success-icon">✓</div>
+            <h2>Account Deleted</h2>
+            <p>Your account has been successfully deleted. Your personal data has been removed and order history anonymized as per our privacy policy.</p>
+        </div>
+    </div>
+
+    <script>
+        let currentEmail = '';
+
+        async function requestOtp() {
+            const emailInput = document.getElementById('email').value.trim();
+            const errorDiv = document.getElementById('email-error');
+            errorDiv.style.display = 'none';
+
+            if (!emailInput || !emailInput.includes('@')) {
+                errorDiv.innerText = 'Please enter a valid email address.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/users/public-delete-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailInput })
+                });
+                
+                const data = await response.json();
+                
+                // Always move to next step to prevent email enumeration
+                currentEmail = emailInput;
+                document.getElementById('email-step').style.display = 'none';
+                document.getElementById('otp-step').style.display = 'block';
+
+            } catch (err) {
+                errorDiv.innerText = 'Something went wrong. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function verifyAndDelete() {
+            const otpInput = document.getElementById('otp').value.trim();
+            const errorDiv = document.getElementById('otp-error');
+            errorDiv.style.display = 'none';
+
+            if (!otpInput || otpInput.length < 6) {
+                errorDiv.innerText = 'Please enter a valid 6-digit OTP.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/users/public-delete-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentEmail, otp: otpInput })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('otp-step').style.display = 'none';
+                    document.getElementById('success-step').style.display = 'block';
+                } else {
+                    errorDiv.innerText = data.message || 'Invalid or expired OTP.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.innerText = 'Something went wrong. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
+  `);
+});
+
+// Privacy Policy Page
+app.get('/privacy-policy', (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy | New Raj Fancy Store</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold-primary: #d4af37;
+            --bg-cream: #fffaf0;
+            --text-dark: #1a1a1a;
+            --text-muted: #4B5563;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: #F8F9FA;
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            background: #fff;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .header { text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #E5E7EB; }
+        .header h1 { font-family: 'Playfair Display', serif; font-size: 2rem; color: #4F46E5; margin-bottom: 10px; }
+        .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+        .section { margin-bottom: 30px; }
+        .section h2 { font-size: 1.25rem; color: #111827; margin-bottom: 12px; display: flex; align-items: center; }
+        .section h2 span { background: #EEF2FF; color: #4F46E5; width: 32px; height: 32px; border-radius: 16px; display: inline-flex; justify-content: center; align-items: center; margin-right: 12px; font-size: 1rem; }
+        .section p, .section ul { color: var(--text-muted); margin-bottom: 12px; font-size: 1rem; }
+        .section ul { padding-left: 20px; list-style-type: disc; }
+        .section ul li { margin-bottom: 6px; }
+        .btn-delete { display: inline-block; background: #fff5f5; color: #e53e3e; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; border: 1px solid #fed7d7; margin-top: 10px; }
+        .btn-delete:hover { background: #fee2e2; }
+        .contact { background: #EEF2FF; padding: 20px; border-radius: 12px; margin-top: 40px; }
+        .contact strong { color: #4F46E5; }
+        @media (max-width: 600px) {
+            .container { margin: 0; border-radius: 0; padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Privacy Policy</h1>
+            <p class="subtitle">Effective Date: September 20, 2026</p>
+        </div>
+
+        <div class="section">
+            <h2><span>1</span> Information Collected</h2>
+            <p>We collect the following personal and non-personal data to provide you with a safe, efficient, and customized experience:</p>
+            <ul>
+                <li>Name, phone number, and email address</li>
+                <li>Shipping and billing address details</li>
+                <li>Order history and payment transaction information</li>
+                <li>Reseller bank/payment information (UPI, Bank Account)</li>
+                <li>Profile/photo information (Avatars)</li>
+                <li>Chat/messages and product reviews</li>
+                <li>App activity (browsing/cart) and FCM/push notification tokens</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2><span>2</span> Usage of Data</h2>
+            <p>We use your data strictly for order processing, product delivery, and customer support. With your explicit consent, we may send marketing communications and push notifications via FCM.</p>
+        </div>
+
+        <div class="section">
+            <h2><span>3</span> Data Sharing</h2>
+            <p>We only share your data with trusted third-party services that are essential to our operations:</p>
+            <ul>
+                <li><strong>Razorpay:</strong> For secure payment processing.</li>
+                <li><strong>Shiprocket:</strong> For shipping logistics and delivery updates.</li>
+                <li><strong>Firebase/FCM:</strong> For delivering push notifications.</li>
+            </ul>
+            <p>Data may also be shared with legal authorities if strictly required under applicable laws.</p>
+        </div>
+
+        <div class="section">
+            <h2><span>4</span> Data Security</h2>
+            <p>We implement industry-standard security practices and encryption protocols to protect your sensitive personal and financial data from unauthorized access, disclosure, or alteration.</p>
+        </div>
+
+        <div class="section">
+            <h2><span>5</span> User Rights & Account Deletion</h2>
+            <p>You may request access to your data, corrections, or complete deletion by using the 'Delete Account' feature in your app profile.</p>
+            <ul>
+                <li>If you delete your account, your personal data will be completely removed.</li>
+                <li>Historical orders and transactions will be anonymized to maintain our financial referential integrity without identifying you.</li>
+            </ul>
+            <p>You can instantly request account deletion via our secure public portal without logging in:</p>
+            <a href="https://newrajfancystore.adsngrow.in/delete-account" class="btn-delete">Request Account Deletion</a>
+        </div>
+
+        <div class="contact">
+            <p><strong>Questions About Privacy?</strong></p>
+            <p>Contact our privacy team directly at Newrajfancystore@gmail.com</p>
+        </div>
+    </div>
+</body>
+</html>
+  `);
+});
+
+// Terms & Conditions Page
+app.get('/terms-and-conditions', (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms & Conditions | New Raj Fancy Store</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold-primary: #d4af37;
+            --bg-cream: #fffaf0;
+            --text-dark: #1a1a1a;
+            --text-muted: #4B5563;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: #F8F9FA;
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            background: #fff;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .header { text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #E5E7EB; }
+        .header h1 { font-family: 'Playfair Display', serif; font-size: 2rem; color: #4F46E5; margin-bottom: 10px; }
+        .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+        .section { margin-bottom: 30px; }
+        .section h2 { font-size: 1.25rem; color: #111827; margin-bottom: 12px; display: flex; align-items: center; }
+        .section h2 span { background: #EEF2FF; color: #4F46E5; width: 32px; height: 32px; border-radius: 16px; display: inline-flex; justify-content: center; align-items: center; margin-right: 12px; font-size: 1rem; }
+        .section p, .section ul { color: var(--text-muted); margin-bottom: 12px; font-size: 1rem; }
+        .section ul { padding-left: 20px; list-style-type: disc; }
+        .section ul li { margin-bottom: 6px; }
+        .footer-note { background: #ECFDF5; color: #065F46; padding: 16px; border-radius: 12px; margin-top: 40px; font-size: 0.95rem; font-weight: 500; }
+        @media (max-width: 600px) {
+            .container { margin: 0; border-radius: 0; padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Terms & Conditions</h1>
+            <p class="subtitle">Effective Date: September 20, 2026</p>
+        </div>
+
+        <div class="section">
+            <h2><span>1</span> Business Information</h2>
+            <p><strong>Business Name:</strong> New Raj Fancy<br>
+            <strong>Address:</strong> Infront of Balaji Parisar, Beside Sai Astha Marriage Garden, Gotegaon, Narsinghpur, M.P 487118<br>
+            <strong>Contact:</strong> 07649830348<br>
+            <strong>Email:</strong> Newrajfancystore@gmail.com</p>
+        </div>
+
+        <div class="section">
+            <h2><span>2</span> Use of Platform & Account Deletion</h2>
+            <p>By accessing our platform, you agree to use it lawfully. You may request account deletion at any time. Upon deletion, your personal data is permanently removed. However, to maintain financial and legal compliance, your historical transaction and order records will be retained in an anonymized format.</p>
+        </div>
+
+        <div class="section">
+            <h2><span>3</span> Product & Pricing</h2>
+            <ul>
+                <li>Prices are inclusive of GST as per Government regulations</li>
+                <li>Product images are for representation purposes</li>
+                <li>Prices are subject to change without prior notice based on market conditions</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2><span>4</span> Orders & Returns</h2>
+            <p>Orders are confirmed after successful payment verification. We offer a <strong>7-day return window</strong> from the date of delivery. Return requests must be made within this timeframe. Refunds for approved returns will be credited according to your original payment method or wallet.</p>
+        </div>
+
+        <div class="section">
+            <h2><span>5</span> Reseller Terms</h2>
+            <ul>
+                <li>Resellers can sell products using our catalog without holding physical inventory</li>
+                <li>Profit margins are set by resellers at their own discretion</li>
+                <li>New Raj Fancy is not responsible for reseller customer communication or pricing differences</li>
+                <li>Misleading customers or making false commitments may lead to immediate account termination</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2><span>6</span> GST Compliance</h2>
+            <ul>
+                <li>GST will be applied as per Government of India regulations</li>
+                <li>GST invoices will be provided upon request for business accounts</li>
+                <li>Resellers are solely responsible for their own GST compliance if selling independently</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2><span>7</span> Intellectual Property</h2>
+            <p>All logos, images, product descriptions, and application content belong to New Raj Fancy. Unauthorized reuse, reproduction, or distribution is strictly prohibited without explicit permission.</p>
+        </div>
+
+        <div class="section">
+            <h2><span>8</span> Limitation of Liability</h2>
+            <p>New Raj Fancy is not liable for indirect damages, delivery delays caused by third-party logistics, or business losses caused by platform downtime or third-party service interruptions.</p>
+        </div>
+
+        <div class="footer-note">
+            By using New Raj Fancy, you acknowledge that you have read and understood these terms.
+        </div>
+    </div>
+</body>
+</html>
+  `);
+});
+
 // Root route
 app.get('/', (req, res) => {
   res.json({

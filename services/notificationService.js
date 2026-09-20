@@ -501,6 +501,60 @@ class NotificationService {
   }
 
   /**
+   * Send Account Deletion OTP
+   */
+  async sendDeleteAccountOtp(user, otp) {
+    if (!user.email) return;
+
+    const emailContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 650px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%); color: #fff; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { padding: 30px; background: #f9fafb; border: 1px solid #eee; border-radius: 0 0 8px 8px; }
+          .otp-box { background: #fff; border: 2px dashed #e53e3e; color: #e53e3e; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; margin: 30px 0; letter-spacing: 5px; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h2>Account Deletion Request</h2>
+          </div>
+          <div class="content">
+            <p>Hi ${user.name},</p>
+            <p>We received a request to delete your account. Use the OTP below to proceed with the deletion. This code is valid for 10 minutes.</p>
+            
+            <div class="otp-box">${otp}</div>
+            
+            <p><strong>Warning:</strong> Deleting your account will remove your personal data and anonymize your order history according to our privacy policy. This action cannot be undone.</p>
+            <p>If you didn't request this, please ignore this email.</p>
+            <br>
+            <p>Thanks,<br>The ${process.env.APP_NAME} Team</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await this.emailTransporter.sendMail({
+        from: `"${process.env.APP_NAME}" <${process.env.SMTP_FROM}>`,
+        to: user.email,
+        subject: `Your Account Deletion Code`,
+        html: emailContent
+      });
+      console.log(`Account deletion OTP sent to ${user.email}`);
+    } catch (error) {
+      console.error('Error sending account deletion OTP:', error);
+      throw new Error('Failed to send OTP email');
+    }
+  }
+
+  /**
    * Broadcast push notification to all users
    */
   async broadcastPushNotification(title, message, data = {}) {
