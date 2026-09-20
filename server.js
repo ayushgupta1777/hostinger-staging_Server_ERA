@@ -780,7 +780,7 @@ app.get('/delete-account', (req, res) => {
     <script>
         // Initialize Firebase
         const firebaseConfig = {
-            apiKey: "AIzaSyDGXR-RTuIad8wnwKO0hZXTpiIP66DT8r0",
+            apiKey: "${process.env.FIREBASE_WEB_API_KEY || ''}",
             authDomain: "new-raj-fancy-store.firebaseapp.com",
             projectId: "new-raj-fancy-store"
         };
