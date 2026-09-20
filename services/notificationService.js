@@ -487,13 +487,31 @@ class NotificationService {
     `;
 
     try {
-      await this.emailTransporter.sendMail({
-        from: `"${process.env.APP_NAME}" <${process.env.SMTP_FROM}>`,
-        to: user.email,
-        subject: `Your Password Reset Code`,
-        html: emailContent
+      if (!process.env.RESEND_API_KEY) {
+        throw new Error('RESEND_API_KEY is missing from environment variables');
+      }
+
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: `${process.env.APP_NAME} <onboarding@resend.dev>`, // Replace with your verified Resend domain in production
+          to: user.email,
+          subject: 'Your Password Reset Code',
+          html: emailContent
+        })
       });
-      console.log(`Password reset OTP sent to ${user.email}`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Resend API Error:', errorData);
+        throw new Error(errorData.message || 'Failed to send OTP via Resend');
+      }
+
+      console.log(`Password reset OTP sent to ${user.email} via Resend`);
     } catch (error) {
       console.error('Error sending password reset OTP:', error);
       throw new Error('Failed to send OTP email');

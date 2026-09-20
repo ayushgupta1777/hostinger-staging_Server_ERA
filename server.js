@@ -993,7 +993,7 @@ app.get('/privacy-policy', (req, res) => {
 
         <div class="contact">
             <p><strong>Questions About Privacy?</strong></p>
-            <p>Contact our privacy team directly at Newrajfancystore@gmail.com</p>
+            <p>Contact our privacy team directly at Newrajfancystore@gmail.com or call us at +91 72409 92230</p>
         </div>
     </div>
 </body>
@@ -1059,7 +1059,7 @@ app.get('/terms-and-conditions', (req, res) => {
             <h2><span>1</span> Business Information</h2>
             <p><strong>Business Name:</strong> New Raj Fancy<br>
             <strong>Address:</strong> Infront of Balaji Parisar, Beside Sai Astha Marriage Garden, Gotegaon, Narsinghpur, M.P 487118<br>
-            <strong>Contact:</strong> 07649830348<br>
+            <strong>Contact:</strong> +91 72409 92230<br>
             <strong>Email:</strong> Newrajfancystore@gmail.com</p>
         </div>
 
