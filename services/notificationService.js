@@ -498,7 +498,9 @@ class NotificationService {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: `${process.env.APP_NAME} <onboarding@resend.dev>`, // Replace with your verified Resend domain in production
+          from: process.env.RESEND_FROM_EMAIL 
+            ? `${process.env.APP_NAME} <${process.env.RESEND_FROM_EMAIL}>` 
+            : `${process.env.APP_NAME} <onboarding@resend.dev>`,
           to: user.email,
           subject: 'Your Password Reset Code',
           html: emailContent
