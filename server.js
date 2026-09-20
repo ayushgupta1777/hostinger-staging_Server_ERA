@@ -56,6 +56,7 @@ connectDB();
 // Middleware
 app.use(helmet({
   crossOriginResourcePolicy: false,
+  contentSecurityPolicy: false,
 })); // Security headers
 // CORS Configuration
 const allowedOrigins = process.env.NODE_ENV === 'production'
