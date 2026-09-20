@@ -9,6 +9,7 @@ import fs from 'fs';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import AppSetting from '../models/AppSetting.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 import { fileURLToPath } from 'url';
 
@@ -510,13 +511,14 @@ class NotificationService {
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Resend API Error:', errorData);
-        throw new Error(errorData.message || 'Failed to send OTP via Resend');
+        throw new AppError(errorData.message || 'Failed to send OTP via Resend', response.status || 400);
       }
 
       console.log(`Password reset OTP sent to ${user.email} via Resend`);
     } catch (error) {
       console.error('Error sending password reset OTP:', error);
-      throw new Error('Failed to send OTP email');
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to send OTP email', 500);
     }
   }
 
