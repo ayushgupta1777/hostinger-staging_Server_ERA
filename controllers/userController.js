@@ -62,6 +62,36 @@ export const updateProfile = async (req, res, next) => {
 };
 
 /**
+ * @desc    Update FCM Token
+ * @route   PUT /api/users/fcm-token
+ * @access  Private
+ */
+export const updateFcmToken = async (req, res, next) => {
+  try {
+    const { fcmToken } = req.body;
+    
+    if (!fcmToken || typeof fcmToken !== 'string' || fcmToken.trim() === '') {
+      return next(new AppError('Please provide a valid FCM token', 400));
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return next(new AppError('User not found', 404));
+    }
+
+    user.fcmToken = fcmToken;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'FCM Token updated successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * @desc    Change user password
  * @route   PUT /api/users/change-password
  * @access  Private

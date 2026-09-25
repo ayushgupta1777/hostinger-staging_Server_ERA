@@ -9,7 +9,8 @@ import {
   changePassword,
   deleteAccount,
   publicDeleteOtp,
-  publicDeleteVerify
+  publicDeleteVerify,
+  updateFcmToken
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -27,6 +28,13 @@ router.get('/profile', protect, getProfile);
  * @access  Private
  */
 router.put('/update-profile', protect, updateProfile);
+
+/**
+ * @desc    Update FCM Token
+ * @route   PUT /api/users/fcm-token
+ * @access  Private
+ */
+router.put('/fcm-token', protect, updateFcmToken);
 
 /**
  * @desc    Change password
