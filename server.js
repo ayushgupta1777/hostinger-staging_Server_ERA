@@ -42,6 +42,7 @@ import wishlistRoutes from './routes/wishlistRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
 import appSettingRoutes from './routes/appSettingRoutes.js';
+import streakRoutes from './routes/streakRoutes.js';
 
 import developerRoutes from './routes/developerRoutes.js';
 
@@ -156,6 +157,7 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/settings', appSettingRoutes);
+app.use('/api/streak', streakRoutes);
 
 
 // console.log('🔑 Razorpay Key:', process.env.RAZORPAY_KEY_ID);
@@ -952,7 +954,7 @@ app.get('/privacy-policy', (req, res) => {
                 <li>Name, phone number, and email address</li>
                 <li>Shipping and billing address details</li>
                 <li>Order history and payment transaction information</li>
-                <li>Reseller bank/payment information (UPI, Bank Account)</li>
+                <li>Reseller business details (Business Name) and payout information (Bank Account Number, IFSC Code, Account Holder Name, Bank Name, UPI ID)</li>
                 <li>Profile/photo information (Avatars)</li>
                 <li>Chat/messages and product reviews</li>
                 <li>App activity (browsing/cart) and FCM/push notification tokens</li>
@@ -960,12 +962,17 @@ app.get('/privacy-policy', (req, res) => {
         </div>
 
         <div class="section">
-            <h2><span>2</span> Usage of Data</h2>
+            <h2><span>2</span> App Usage and Activity Data</h2>
+            <p>We may collect information about your use of the New Raj Fancy app, such as active app usage time, activity dates, and related progress information, to provide features such as daily streaks, activity history, and personalized app functionality.</p>
+        </div>
+
+        <div class="section">
+            <h2><span>3</span> Usage of Data</h2>
             <p>We use your data strictly for order processing, product delivery, and customer support. With your explicit consent, we may send marketing communications and push notifications via FCM.</p>
         </div>
 
         <div class="section">
-            <h2><span>3</span> Data Sharing</h2>
+            <h2><span>4</span> Data Sharing</h2>
             <p>We only share your data with trusted third-party services that are essential to our operations:</p>
             <ul>
                 <li><strong>Razorpay:</strong> For secure payment processing.</li>
@@ -976,12 +983,12 @@ app.get('/privacy-policy', (req, res) => {
         </div>
 
         <div class="section">
-            <h2><span>4</span> Data Security</h2>
+            <h2><span>5</span> Data Security</h2>
             <p>We implement industry-standard security practices and encryption protocols to protect your sensitive personal and financial data from unauthorized access, disclosure, or alteration.</p>
         </div>
 
         <div class="section">
-            <h2><span>5</span> User Rights & Account Deletion</h2>
+            <h2><span>6</span> User Rights & Account Deletion</h2>
             <p>You may request access to your data, corrections, or complete deletion by using the 'Delete Account' feature in your app profile.</p>
             <ul>
                 <li>If you delete your account, your personal data will be completely removed.</li>
